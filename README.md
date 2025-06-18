@@ -43,7 +43,7 @@ LISA/
 
 1. **Clone the repository**
 ```bash
-git clone https://gitlab.pg.innopolis.university/t.chertykovtceva/lisa.git
+git clone https://github.com/LISA-SWP25/backend.git
 cd lisa/backend 
 ```
 2. **Setup virtual environment**
