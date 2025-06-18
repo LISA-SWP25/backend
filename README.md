@@ -1,7 +1,6 @@
 # backend
 # LISA
 
-
 **Legitimate Infrastructure Simulation Agent - Backend & CI/CD**
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/your-org/lisa)
@@ -13,6 +12,30 @@
 ##  Overview
 
 LISA is a system for creating and managing agents that simulate legitimate user activity in cyber ranges and SOC training environments. The backend provides APIs for role management, behavior template creation, agent configuration generation, and CI/CD automation.
+
+## Project Structure
+```
+LISA/
+├── backend/                 # FastAPI Backend
+│   ├── app/
+│   │   ├── main.py         # Main API application
+│   │   ├── models/         # Database models
+│   │   ├── api/            # API endpoints
+│   │   └── database.py     # Database configuration
+│   └── requirements.txt
+├── frontend/               # Vue.js Frontend
+│   ├── src/
+│   │   ├── components/     # Vue components
+│   │   ├── views/          # Page views
+│   │   └── main.js         # Application entry point
+│   └── package.json
+├── linux_agent/           # Linux Agent
+│   ├── agent.py           # Main agent script
+│   ├── config.yaml        # Agent configuration
+│   └── roles/             # User role definitions
+└── docs/                  # Documentation
+```
+
 
 ## Getting started
 
