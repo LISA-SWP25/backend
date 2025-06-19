@@ -220,7 +220,6 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
         ]
     }
 
-# In agents.py, add this endpoint:
 @router.post("/agents/generate-config")
 def generate_agent_config(request: dict, db: Session = Depends(get_db)):
     agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
