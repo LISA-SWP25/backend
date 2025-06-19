@@ -151,6 +151,42 @@ def list_agents(
     agents = query.order_by(desc(Agent.created_at)).offset(skip).limit(limit).all()
     return agents
 
+@router.post("/api/agents/generate-config")
+def generate_agent_config(request: dict, db: Session = Depends(get_db)):
+    """Generate config for unified_agent.py"""
+    
+    # Create agent record
+    agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
+    
+    # Generate config matching your unified_agent.py format
+    config = {
+        "user_id": agent_id,
+        "username": request.get("username", "john_doe"),
+        "full_name": request.get("full_name", "John Doe"),
+        "role": request.get("role", "Junior Developer"),
+        "work_schedule": {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "breaks": [{"start": "13:00", "duration_minutes": 60}]
+        },
+        "operating_system": request.get("os", "Linux Ubuntu 22.04"),
+        "applications_used": [
+            "Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"
+        ]
+    }
+    
+    return {
+        "success": True,
+        "agent_id": agent_id,
+        "config": config,
+        "download_url": f"/api/agents/{agent_id}/download"
+    }
+
+@router.get("/api/agents/{agent_id}/download")
+def download_config(agent_id: str):
+    """Download agent config as JSON"""
+    # Return FileResponse with the config
+
 @router.get("/agents/{agent_id}/status")
 def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
     """Get agent status from database (not runtime status)"""
@@ -182,4 +218,28 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
                 "timestamp": activity.timestamp
             } for activity in recent_activities
         ]
+    }
+
+# In agents.py, add this endpoint:
+@router.post("/agents/generate-config")
+def generate_agent_config(request: dict, db: Session = Depends(get_db)):
+    agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
+    
+    config = {
+        "user_id": agent_id,
+        "username": request.get("username", "john_doe"),
+        "role": request.get("role", "Junior Developer"),
+        "work_schedule": {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "breaks": [{"start": "13:00", "duration_minutes": 60}]
+        },
+        "operating_system": "Linux Ubuntu 22.04",
+        "applications_used": ["Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"]
+    }
+    
+    return {
+        "agent_id": agent_id,
+        "config": config,
+        "download_url": f"/api/agents/{agent_id}/config"
     }
