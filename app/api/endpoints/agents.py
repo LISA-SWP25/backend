@@ -242,3 +242,16 @@ def generate_agent_config(request: dict, db: Session = Depends(get_db)):
         "config": config,
         "download_url": f"/api/agents/{agent_id}/config"
     }
+
+@router.post("/agents/{agent_id}/deploy")
+def deploy_agent(agent_id: str, target_host: str, db: Session = Depends(get_db)):
+    # Get agent config
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    
+    # Generate dropper command
+    dropper_cmd = f"python3 dropper.py --config {agent_id}_config.json --target {target_host}"
+    
+    # Execute deployment
+    result = subprocess.run(dropper_cmd, shell=True, capture_output=True)
+    
+    return {"status": "deployed" if result.returncode == 0 else "failed"}
