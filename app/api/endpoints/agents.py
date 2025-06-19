@@ -1,12 +1,14 @@
-# Agent CRUD + Config generation
+# Agent CRUD + Config generation + deploy
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
+from pydantic import BaseModel
 import uuid
 import json
 import tempfile
+import subprocess
 from datetime import datetime
 
 from app.deps import get_db
@@ -15,10 +17,85 @@ from app.schemas import AgentConfig, AgentResponse, AgentGenerateResponse
 
 router = APIRouter()
 
+class ConfigRequest(BaseModel):
+    username: str = "john_doe"
+    role: str = "Junior Developer"
+    full_name: str = "John Doe"
+
+# config generation for unified_agent.py
+@router.post("/agents/generate-config")
+def generate_agent_config(request: ConfigRequest, db: Session = Depends(get_db)):
+    """Generate config for unified_agent.py"""
+    agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
+    
+    config = {
+        "user_id": agent_id,
+        "username": request.username,
+        "full_name": request.full_name,
+        "role": request.role,
+        "work_schedule": {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "breaks": [{"start": "13:00", "duration_minutes": 60}]
+        },
+        "operating_system": "Linux Ubuntu 22.04",
+        "applications_used": [
+            "Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"
+        ],
+        "activity_pattern": "Regular office hours with lunch break",
+        "department": "Development",
+        "location": "Headquarters"
+    }
+    
+    return {
+        "agent_id": agent_id,
+        "config": config,
+        "download_url": f"/api/agents/{agent_id}/config"
+    }
+
+@router.get("/agents/{agent_id}/config")
+def download_config(agent_id: str):
+    """Download agent config as JSON"""
+    config = {
+        "user_id": agent_id,
+        "username": "john_doe",
+        "full_name": "John Doe",
+        "role": "Junior Developer",
+        "work_schedule": {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "breaks": [{"start": "13:00", "duration_minutes": 60}]
+        },
+        "operating_system": "Linux Ubuntu 22.04",
+        "applications_used": [
+            "Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"
+        ],
+        "activity_pattern": "Regular office hours with lunch break",
+        "department": "Development",
+        "location": "Headquarters"
+    }
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(config, f, indent=2)
+        temp_path = f.name
+    
+    return FileResponse(
+        temp_path,
+        filename=f"{agent_id}_config.json",
+        media_type="application/json"
+    )
+
+@router.post("/agents/{agent_id}/deploy")
+def deploy_agent(agent_id: str, target_host: str = "localhost"):
+    """Deploy agent via dropper"""
+    dropper_cmd = f"python3 dropper.py --config {agent_id}_config.json --target {target_host}"
+    result = subprocess.run(dropper_cmd, shell=True, capture_output=True)
+    return {"status": "deployed" if result.returncode == 0 else "failed"}
+
+# Database-based config generation (original complex version)
 @router.post("/agents/generate", response_model=AgentGenerateResponse)
-def generate_agent_config(config: AgentConfig, db: Session = Depends(get_db)):
-    """Generate agent configuration (my responsibility: config generation only)"""
-    # Validate role and template
+def generate_agent_db_config(config: AgentConfig, db: Session = Depends(get_db)):
+    """Generate agent configuration using database models"""
     role = db.query(Role).filter(Role.id == config.role_id, Role.is_active == True).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -30,17 +107,14 @@ def generate_agent_config(config: AgentConfig, db: Session = Depends(get_db)):
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     
-    # Validate OS compatibility
     if template.os_type != config.os_type:
         raise HTTPException(
             status_code=400,
             detail=f"Template OS ({template.os_type}) doesn't match requested OS ({config.os_type})"
         )
     
-    # Generate unique agent ID
     agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
     
-    # Create agent record in database
     db_agent = Agent(
         agent_id=agent_id,
         name=config.name,
@@ -56,7 +130,6 @@ def generate_agent_config(config: AgentConfig, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_agent)
     
-    # Generate configuration for download (JSON format)
     agent_config = {
         "agent_id": agent_id,
         "name": config.name,
@@ -84,12 +157,11 @@ def generate_agent_config(config: AgentConfig, db: Session = Depends(get_db)):
 
 @router.get("/agents/{agent_id}/config/download")
 def download_agent_config(agent_id: str, format: str = "json", db: Session = Depends(get_db)):
-    """Download agent configuration file"""
+    """Download agent configuration file from database"""
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    # Build complete config
     config = {
         "agent_id": agent.agent_id,
         "name": agent.name,
@@ -107,25 +179,17 @@ def download_agent_config(agent_id: str, format: str = "json", db: Session = Dep
         "version": "1.0"
     }
     
-    if format.lower() == "yaml":
-        import yaml
-        content = yaml.dump(config, default_flow_style=False)
-        filename = f"{agent_id}_config.yaml"
-        media_type = "application/x-yaml"
-    else:
-        content = json.dumps(config, indent=2)
-        filename = f"{agent_id}_config.json"
-        media_type = "application/json"
+    content = json.dumps(config, indent=2)
+    filename = f"{agent_id}_config.json"
     
-    # Create temporary file
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=f'.{format.lower()}') as tmp:
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmp:
         tmp.write(content)
         tmp_path = tmp.name
     
     return FileResponse(
         path=tmp_path,
         filename=filename,
-        media_type=media_type,
+        media_type="application/json",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
@@ -138,7 +202,7 @@ def list_agents(
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Get list of agents with filtering (DB records only)"""
+    """Get list of agents with filtering"""
     query = db.query(Agent)
     
     if status:
@@ -151,50 +215,13 @@ def list_agents(
     agents = query.order_by(desc(Agent.created_at)).offset(skip).limit(limit).all()
     return agents
 
-@router.post("/api/agents/generate-config")
-def generate_agent_config(request: dict, db: Session = Depends(get_db)):
-    """Generate config for unified_agent.py"""
-    
-    # Create agent record
-    agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
-    
-    # Generate config matching your unified_agent.py format
-    config = {
-        "user_id": agent_id,
-        "username": request.get("username", "john_doe"),
-        "full_name": request.get("full_name", "John Doe"),
-        "role": request.get("role", "Junior Developer"),
-        "work_schedule": {
-            "start_time": "09:00",
-            "end_time": "18:00",
-            "breaks": [{"start": "13:00", "duration_minutes": 60}]
-        },
-        "operating_system": request.get("os", "Linux Ubuntu 22.04"),
-        "applications_used": [
-            "Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"
-        ]
-    }
-    
-    return {
-        "success": True,
-        "agent_id": agent_id,
-        "config": config,
-        "download_url": f"/api/agents/{agent_id}/download"
-    }
-
-@router.get("/api/agents/{agent_id}/download")
-def download_config(agent_id: str):
-    """Download agent config as JSON"""
-    # Return FileResponse with the config
-
 @router.get("/agents/{agent_id}/status")
 def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
-    """Get agent status from database (not runtime status)"""
+    """Get agent status from database"""
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    # Get recent activities from database
     recent_activities = db.query(AgentActivity).filter(
         AgentActivity.agent_id == agent.id
     ).order_by(desc(AgentActivity.timestamp)).limit(10).all()
@@ -203,7 +230,7 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
         "agent": {
             "agent_id": agent.agent_id,
             "name": agent.name,
-            "status": agent.status,  # DB status, not runtime
+            "status": agent.status,
             "os_type": agent.os_type,
             "role": agent.role.name,
             "template": agent.template.name,
@@ -219,39 +246,3 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
             } for activity in recent_activities
         ]
     }
-
-@router.post("/agents/generate-config")
-def generate_agent_config(request: dict, db: Session = Depends(get_db)):
-    agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
-    
-    config = {
-        "user_id": agent_id,
-        "username": request.get("username", "john_doe"),
-        "role": request.get("role", "Junior Developer"),
-        "work_schedule": {
-            "start_time": "09:00",
-            "end_time": "18:00",
-            "breaks": [{"start": "13:00", "duration_minutes": 60}]
-        },
-        "operating_system": "Linux Ubuntu 22.04",
-        "applications_used": ["Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"]
-    }
-    
-    return {
-        "agent_id": agent_id,
-        "config": config,
-        "download_url": f"/api/agents/{agent_id}/config"
-    }
-
-@router.post("/agents/{agent_id}/deploy")
-def deploy_agent(agent_id: str, target_host: str, db: Session = Depends(get_db)):
-    # Get agent config
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    
-    # Generate dropper command
-    dropper_cmd = f"python3 dropper.py --config {agent_id}_config.json --target {target_host}"
-    
-    # Execute deployment
-    result = subprocess.run(dropper_cmd, shell=True, capture_output=True)
-    
-    return {"status": "deployed" if result.returncode == 0 else "failed"}
