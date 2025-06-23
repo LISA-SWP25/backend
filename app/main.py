@@ -52,7 +52,7 @@ def get_dashboard_stats():
         "system_status": "healthy" if online_agents > 0 else "no_agents"
     }
 
-# ==================== ROUTERS ====================
+# Include routers
 app.include_router(roles.router, prefix="/api", tags=["Roles"])
 app.include_router(templates.router, prefix="/api", tags=["Templates"])
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
