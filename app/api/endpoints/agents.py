@@ -1,4 +1,3 @@
-# Agent CRUD + Config generation + deploy
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -22,7 +21,7 @@ class ConfigRequest(BaseModel):
     role: str = "Junior Developer"
     full_name: str = "John Doe"
 
-# config generation for unified_agent.py
+# Simplified config generation for unified_agent.py
 @router.post("/agents/generate-config")
 def generate_agent_config(request: ConfigRequest, db: Session = Depends(get_db)):
     """Generate config for unified_agent.py"""
@@ -214,6 +213,60 @@ def list_agents(
     
     agents = query.order_by(desc(Agent.created_at)).offset(skip).limit(limit).all()
     return agents
+
+@router.post("/agents/{agent_id}/deploy")
+def deploy_agent_to_target(agent_id: str, target_config: dict, db: Session = Depends(get_db)):
+    """Deploy enhanced agent to target machine"""
+    
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Create enhanced config for the agent
+    enhanced_config = {
+        "user_id": agent.agent_id,
+        "username": target_config.get("username", "user"),
+        "full_name": target_config.get("full_name", "Generic User"),
+        "role": agent.role.name,
+        "work_schedule": {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "breaks": [{"start": "13:00", "duration_minutes": 60}]
+        },
+        "applications_used": ["Visual Studio Code", "Google Chrome", "Slack"],
+        "plugin_support": {
+            "enabled": True,
+            "plugins_directory": "/opt/linux_agent/plugins",
+            "auto_load": True,
+            "fallback_to_builtin": True
+        }
+    }
+    
+    # Call dropper service to deploy
+    dropper_payload = {
+        "agent_id": agent_id,
+        "target_host": target_config["target_host"],
+        "credentials": target_config["credentials"],
+        "agent_config": enhanced_config,
+        "injection_method": target_config.get("injection_method", "dropper")
+    }
+    
+    # This would call the dropper service
+    return {"status": "deployment_initiated", "config": enhanced_config}
+
+@router.get("/agents/{agent_id}/activities")
+def get_agent_activities(agent_id: str, db: Session = Depends(get_db)):
+    """Get real-time activities from deployed agent"""
+    
+    # This would read from agent logs or status
+    return {
+        "agent_id": agent_id,
+        "current_status": "active",
+        "current_application": "Visual Studio Code",
+        "last_activity": "Editing main.py",
+        "work_session_time": "2h 15m",
+        "activities_today": 47
+    }
 
 @router.get("/agents/{agent_id}/status")
 def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
