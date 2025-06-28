@@ -3,10 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import Dict, List, Optional
 import uuid
+from app.api.endpoints import heartbeat
 
 # Database imports
 from app.database import Base, engine
-from app.api.endpoints import roles, templates, agents, builds, system
+from app.api.endpoints import roles, templates, agents, builds, system, monitoring
+from app.api import websocket
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="LISA Backend API",
@@ -29,35 +34,28 @@ app.add_middleware(
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats():
-    """Получить статистику для dashboard"""
-    total_agents = len(active_agents)
-    online_agents = 0
-    total_activities = 0
-    
-    for agent_id, agent_info in active_agents.items():
-        last_seen = datetime.fromisoformat(agent_info["last_seen"].replace('Z', '+00:00'))
-        time_diff = (datetime.now() - last_seen.replace(tzinfo=None)).total_seconds()
-        
-        if time_diff < 300:  # Онлайн если активность < 5 мин назад
-            online_agents += 1
-        
-        total_activities += len(agent_activities.get(agent_id, []))
-    
+    """Get dashboard statistics"""
+    # For now, return mock data
+    # In production, this should query the database
     return {
-        "total_agents": total_agents,
-        "online_agents": online_agents,
-        "offline_agents": total_agents - online_agents,
-        "total_activities": total_activities,
-        "avg_activities_per_agent": total_activities / max(total_agents, 1),
-        "system_status": "healthy" if online_agents > 0 else "no_agents"
+        "total_agents": 0,
+        "online_agents": 0,
+        "offline_agents": 0,
+        "total_activities": 0,
+        "avg_activities_per_agent": 0.0,
+        "system_status": "healthy"
     }
 
 # Include routers
 app.include_router(roles.router, prefix="/api", tags=["Roles"])
 app.include_router(templates.router, prefix="/api", tags=["Templates"])
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
+app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
 app.include_router(builds.router, prefix="/api", tags=["CI/CD"])
 app.include_router(system.router, prefix="/api", tags=["System"])
+app.include_router(monitoring.router, prefix="/api", tags=["Monitoring"])
+app.include_router(websocket.router, prefix="/api", tags=["WebSocket"])
+
 
 @app.get("/")
 def root():
@@ -68,3 +66,14 @@ def root():
         "docs": "/docs",
         "integration": "enabled"
     }
+
+# Background task for cleaning up inactive agents
+@app.on_event("startup")
+async def startup_event():
+    # This would start a background task to monitor agent health
+    pass
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Cleanup connections
+    pass
