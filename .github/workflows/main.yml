@@ -20,7 +20,21 @@ jobs:
       with:
         node-version: '20'
 
+    
+
     - name: Install dependencies
+
+    steps:
+  - uses: actions/checkout@v4
+
+  - name: Change directory to backend
+    run: cd backend
+
+  - name: Install dependencies
+    run: |
+      cd backend
+      npm install
+
       run: npm install
 
     - name: Run tests
