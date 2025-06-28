@@ -1,4 +1,4 @@
-name: CI
+name: CI backend
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  check:
+  test:
     runs-on: ubuntu-latest
     
     steps:
@@ -22,37 +22,17 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install -r requirements.txt
-        
-    - name: Check if app starts
-      run: |
-        echo "🚀 Проверяем что приложение запускается..."
-        timeout 10 python -c "
-        try:
-            import main
-            print('✅ main.py импортируется успешно')
-        except Exception as e:
-            print(f'❌ Ошибка: {e}')
-            exit(1)
-        " || echo "⚠️ Проверка завершена"
-        
-    - name: Run tests (if exist)
-      run: |
         pip install pytest
-        echo "🧪 Ищем и запускаем тесты..."
         
+    - name: Test import
+      run: python -c "import main"
+        
+    - name: Run tests
+      run: |
         if [ -f "test_api.py" ]; then
-          echo "📍 Найден test_api.py"
-          pytest test_api.py -v
+          pytest test_api.py
         elif [ -f "tests/test_api.py" ]; then
-          echo "📍 Найден tests/test_api.py"
-          pytest tests/test_api.py -v
+          pytest tests/test_api.py
         elif [ -d "tests" ]; then
-          echo "📍 Найдена папка tests"
-          pytest tests/ -v
-        else
-          echo "⚠️ Тесты не найдены, создайте test_api.py"
-          echo "✅ Но это не критично, CI проходит"
+          pytest tests/
         fi
-        
-    - name: Success
-      run: echo "🎉 Все проверки пройдены!"
