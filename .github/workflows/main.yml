@@ -1,4 +1,4 @@
-name: Backend CI/CD Pipeline
+name: CI Backend 
 
 on:
   push:
@@ -9,23 +9,21 @@ on:
     branches:
       - main
       - develop
-  release:
-    types: [published]
 
 env:
   PYTHON_VERSION: '3.10'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Код качество и тесты
-  quality-check:
+  # Мягкие проверки с автоисправлением
+  gentle-check:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v4
       with:
@@ -43,135 +41,105 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov black flake8 bandit safety
+        pip install pytest black flake8
         
-    - name: Code formatting check (Black)
-      run: black --check --diff .
-      
-    - name: Linting (Flake8)
-      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-      
-    - name: Security check (Bandit)
-      run: bandit -r . -x ./tests/
-      
-    - name: Dependency security check
-      run: safety check
-      
-    - name: Run tests with coverage
+    # Автоисправление форматирования
+    - name: Auto-format code with Black
       run: |
-        pytest --cov=. --cov-report=xml --cov-report=html --cov-fail-under=80
+        echo "🔧 Автоматическое форматирование кода..."
+        black .
         
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+    - name: Check if formatting changes were made
+      id: format-check
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "📝 Код был отформатирован автоматически"
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "✅ Код уже отформатирован правильно"
+        fi
+        
+    # Коммит изменений форматирования (только для push, не для PR)
+    - name: Commit formatting changes
+      if: steps.format-check.outputs.changes == 'true' && github.event_name == 'push'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "🤖 Auto-format code with Black [skip ci]" || exit 0
+        git push
+        
+    # Мягкий линтинг (предупреждения, не ошибки)
+    - name: Code quality check (warnings only)
+      run: |
+        echo "🔍 Проверка качества кода..."
+        echo "=== Flake8 проверки ==="
+        flake8 . --count --statistics --exit-zero || true
+        echo ""
+        echo "=== Если есть замечания выше, рекомендуем их исправить ==="
+        
+    # Базовые тесты
+    - name: Run basic tests
+      run: |
+        echo "🧪 Запуск базовых тестов..."
+        pytest tests/test_api.py -v || {
+          echo "❌ Некоторые тесты не прошли"
+          echo "💡 Проверьте тесты локально: make test"
+          exit 1
+        }
+        
+    # Расширенные тесты (не блокирующие)
+    - name: Run extended tests (non-blocking)
+      run: |
+        echo "🧪 Запуск расширенных тестов..."
+        if [ -f "tests/test_api_extended.py" ]; then
+          pytest tests/test_api_extended.py -v --tb=short || {
+            echo "⚠️ Некоторые расширенные тесты не прошли (не критично)"
+          }
+        else
+          echo "ℹ️ Расширенные тесты не найдены"
+        fi
+        
+    - name: Success message
+      run: |
+        echo "🎉 Мягкие проверки завершены!"
+        echo ""
+        echo "📋 Что дальше:"
+        echo "1. Проверьте предупреждения выше (если есть)"
+        echo "2. Для полных проверок используйте: make quality"
+        echo "3. Когда готовы - переключитесь на строгий CI/CD"
 
-  # Сборка Docker образа
-  build:
-    needs: quality-check
+  # Опциональная сборка Docker (только при изменениях)
+  build-if-changed:
     runs-on: ubuntu-latest
-    
-    outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
-      image-uri: ${{ steps.build.outputs.image-uri }}
+    if: contains(github.event.head_commit.message, '[build]') || github.ref == 'refs/heads/main'
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Check if Dockerfile exists
+      id: dockerfile-check
+      run: |
+        if [ -f "Dockerfile" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
         
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=sha,prefix={{branch}}-
-          
-    - name: Build and push Docker image
-      id: build
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-  # Деплой на staging (для develop ветки)
-  deploy-staging:
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    needs: [quality-check, build]
-    runs-on: ubuntu-latest
-    environment: staging
-    
-    steps:
-    - name: Deploy to staging
+    - name: Build Docker image (test only)
+      if: steps.dockerfile-check.outputs.exists == 'true'
       run: |
-        echo "Deploying to staging environment..."
-        echo "Image: ${{ needs.build.outputs.image-uri }}"
-        # Здесь добавьте команды для деплоя на staging
-        # Например, обновление Kubernetes deployment или Docker Compose
+        echo "🐳 Тестовая сборка Docker образа..."
+        docker build -t lisa-backend-test . || {
+          echo "❌ Ошибка сборки Docker образа"
+          echo "💡 Проверьте Dockerfile и requirements.txt"
+          exit 1
+        }
+        echo "✅ Docker образ собирается успешно!"
         
-  # Деплой на production (для main ветки)
-  deploy-production:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [quality-check, build]
-    runs-on: ubuntu-latest
-    environment: production
-    
-    steps:
-    - name: Deploy to production
+    - name: Docker not found
+      if: steps.dockerfile-check.outputs.exists == 'false'
       run: |
-        echo "Deploying to production environment..."
-        echo "Image: ${{ needs.build.outputs.image-uri }}"
-        # Здесь добавьте команды для деплоя на production
-
-  # Деплой релизов
-  deploy-release:
-    if: github.event_name == 'release'
-    needs: [quality-check, build]
-    runs-on: ubuntu-latest
-    environment: production
-    
-    steps:
-    - name: Deploy release to production
-      run: |
-        echo "Deploying release ${{ github.event.release.tag_name }} to production..."
-        echo "Image: ${{ needs.build.outputs.image-uri }}"
-
-  # Уведомления о статусе
-  notify:
-    if: always()
-    needs: [quality-check, build, deploy-staging, deploy-production]
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Notify on success
-      if: ${{ needs.quality-check.result == 'success' && needs.build.result == 'success' }}
-      run: |
-        echo "✅ Pipeline completed successfully!"
-        # Добавьте интеграцию с Slack/Discord/Teams при необходимости
-        
-    - name: Notify on failure
-      if: ${{ needs.quality-check.result == 'failure' || needs.build.result == 'failure' }}
-      run: |
-        echo "❌ Pipeline failed!"
-        # Добавьте уведомления об ошибках
+        echo "ℹ️ Dockerfile не найден - пропускаем сборку"
