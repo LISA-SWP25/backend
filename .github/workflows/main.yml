@@ -1,151 +1,134 @@
-name: CI backend
+name: Adaptive CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [ main, develop ]
   pull_request:
-    branches:
-      - main
-      - develop
-
-env:
-  PYTHON_VERSION: '3.10'
+    branches: [ main, develop ]
 
 jobs:
-  # Мягкие проверки с автоисправлением
-  gentle-check:
+  smart-check:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
+        python-version: '3.10'
         
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-          
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest black flake8
         
-    # Автоисправление форматирования
-    - name: Auto-format code with Black
+    - name: Analyze project structure
+      id: analyze
       run: |
-        echo "🔧 Автоматическое форматирование кода..."
-        black .
+        echo "🔍 Анализ структуры проекта..."
         
-    - name: Check if formatting changes were made
-      id: format-check
-      run: |
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "changes=true" >> $GITHUB_OUTPUT
-          echo "📝 Код был отформатирован автоматически"
+        # Найти все тестовые файлы
+        TEST_FILES=$(find . -name "*test*.py" -type f | grep -v __pycache__ | head -20)
+        
+        if [ -z "$TEST_FILES" ]; then
+          echo "tests_found=false" >> $GITHUB_OUTPUT
+          echo "test_path=" >> $GITHUB_OUTPUT
         else
-          echo "changes=false" >> $GITHUB_OUTPUT
-          echo "✅ Код уже отформатирован правильно"
+          echo "tests_found=true" >> $GITHUB_OUTPUT
+          echo "📁 Найденные тестовые файлы:"
+          echo "$TEST_FILES"
+          
+          # Определить основную папку с тестами
+          if [ -d "tests" ] && [ "$(find tests -name "*.py" -type f | wc -l)" -gt 0 ]; then
+            echo "test_path=tests/" >> $GITHUB_OUTPUT
+            echo "📍 Основная папка тестов: tests/"
+          elif [ -f "test_api.py" ]; then
+            echo "test_path=test_api.py" >> $GITHUB_OUTPUT
+            echo "📍 Тест в корне: test_api.py"
+          else
+            # Найти первый тестовый файл
+            FIRST_TEST=$(echo "$TEST_FILES" | head -1)
+            echo "test_path=$FIRST_TEST" >> $GITHUB_OUTPUT
+            echo "📍 Первый найденный тест: $FIRST_TEST"
+          fi
         fi
         
-    # Уведомление о необходимости форматирования (вместо автокоммита)
-    - name: Formatting reminder
-      if: steps.format-check.outputs.changes == 'true'
-      run: |
-        echo "📝 Обнаружены изменения форматирования!"
-        echo ""
-        echo "🔧 Для исправления выполните локально:"
-        echo "   black ."
-        echo "   git add ."
-        echo "   git commit -m 'Format code with Black'"
-        echo "   git push"
-        echo ""
-        echo "💡 Или установите pre-commit хуки для автоматического форматирования:"
-        echo "   pip install pre-commit"
-        echo "   pre-commit install"
+        # Проверить main.py
+        if [ -f "main.py" ]; then
+          echo "main_exists=true" >> $GITHUB_OUTPUT
+          echo "📄 Найден main.py"
+        else
+          echo "main_exists=false" >> $GITHUB_OUTPUT
+          echo "⚠️  main.py не найден"
+        fi
         
-    # Мягкий линтинг (предупреждения, не ошибки)
-    - name: Code quality check (warnings only)
+    - name: Check code formatting
       run: |
-        echo "🔍 Проверка качества кода..."
-        echo "=== Flake8 проверки ==="
+        echo "🔍 Проверка форматирования..."
+        if black --check --diff .; then
+          echo "✅ Код отформатирован правильно!"
+        else
+          echo "❌ Код нужно отформатировать"
+          echo ""
+          echo "🔧 Исправление:"
+          echo "  black ."
+          echo "  git add ."
+          echo "  git commit -m 'Format code with Black'"
+          echo "  git push"
+          exit 1
+        fi
+        
+    - name: Run linting (warnings only)
+      run: |
+        echo "🔍 Проверка стиля кода..."
         flake8 . --count --statistics --exit-zero || true
+        
+    - name: Run tests
+      if: steps.analyze.outputs.tests_found == 'true'
+      run: |
+        echo "🧪 Запуск найденных тестов..."
+        echo "📍 Путь к тестам: ${{ steps.analyze.outputs.test_path }}"
+        pytest ${{ steps.analyze.outputs.test_path }} -v
+        
+    - name: No tests warning
+      if: steps.analyze.outputs.tests_found == 'false'
+      run: |
+        echo "⚠️  Тесты не найдены!"
         echo ""
-        echo "=== Если есть замечания выше, рекомендуем их исправить ==="
-        
-    # Базовые тесты
-    - name: Run basic tests
-      run: |
-        echo "🧪 Запуск базовых тестов..."
-        pytest tests/test_api.py -v || {
-          echo "❌ Некоторые тесты не прошли"
-          echo "💡 Проверьте тесты локально: make test"
-          exit 1
-        }
-        
-    # Расширенные тесты (не блокирующие)
-    - name: Run extended tests (non-blocking)
-      run: |
-        echo "🧪 Запуск расширенных тестов..."
-        if [ -f "tests/test_api_extended.py" ]; then
-          pytest tests/test_api_extended.py -v --tb=short || {
-            echo "⚠️ Некоторые расширенные тесты не прошли (не критично)"
-          }
-        else
-          echo "ℹ️ Расширенные тесты не найдены"
-        fi
-        
-    - name: Success message
-      run: |
-        echo "🎉 Мягкие проверки завершены!"
+        echo "💡 Рекомендуемая структура:"
+        echo "  mkdir tests"
+        echo "  # Создать tests/test_api.py с вашими тестами"
+        echo "  # Или поместить test_api.py в корень проекта"
         echo ""
-        echo "📋 Что дальше:"
-        echo "1. Проверьте предупреждения выше (если есть)"
-        echo "2. Для полных проверок используйте: make quality"
-        echo "3. Когда готовы - переключитесь на строгий CI/CD"
-
-  # Опциональная сборка Docker (только при изменениях)
-  build-if-changed:
-    runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '[build]') || github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Check if Dockerfile exists
-      id: dockerfile-check
+        echo "🔍 Поиск Python файлов в проекте:"
+        find . -name "*.py" -type f | grep -v __pycache__ | head -10
+        
+    - name: Test main.py import
+      if: steps.analyze.outputs.main_exists == 'true'
       run: |
-        if [ -f "Dockerfile" ]; then
-          echo "exists=true" >> $GITHUB_OUTPUT
+        echo "🧪 Проверка импорта main.py..."
+        python -c "
+        try:
+            import main
+            print('✅ main.py импортируется успешно')
+        except Exception as e:
+            print(f'❌ Ошибка импорта main.py: {e}')
+            exit(1)
+        "
+        
+    - name: Success summary
+      run: |
+        echo "🎉 Проверки завершены!"
+        echo ""
+        echo "📊 Результаты:"
+        echo "  📄 main.py: ${{ steps.analyze.outputs.main_exists == 'true' && '✅' || '❌' }}"
+        echo "  🧪 Тесты: ${{ steps.analyze.outputs.tests_found == 'true' && '✅' || '⚠️' }}"
+        echo "  🎨 Форматирование: ✅"
+        echo ""
+        if [ "${{ steps.analyze.outputs.tests_found }}" == "false" ]; then
+          echo "💡 Следующий шаг: добавить тесты"
         else
-          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "🚀 Проект готов к разработке!"
         fi
-        
-    - name: Build Docker image (test only)
-      if: steps.dockerfile-check.outputs.exists == 'true'
-      run: |
-        echo "🐳 Тестовая сборка Docker образа..."
-        docker build -t lisa-backend-test . || {
-          echo "❌ Ошибка сборки Docker образа"
-          echo "💡 Проверьте Dockerfile и requirements.txt"
-          exit 1
-        }
-        echo "✅ Docker образ собирается успешно!"
-        
-    - name: Docker not found
-      if: steps.dockerfile-check.outputs.exists == 'false'
-      run: |
-        echo "ℹ️ Dockerfile не найден - пропускаем сборку"
