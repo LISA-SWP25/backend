@@ -1,4 +1,4 @@
-name: CI Backend 
+name: CI backend
 
 on:
   push:
@@ -60,15 +60,21 @@ jobs:
           echo "✅ Код уже отформатирован правильно"
         fi
         
-    # Коммит изменений форматирования (только для push, не для PR)
-    - name: Commit formatting changes
-      if: steps.format-check.outputs.changes == 'true' && github.event_name == 'push'
+    # Уведомление о необходимости форматирования (вместо автокоммита)
+    - name: Formatting reminder
+      if: steps.format-check.outputs.changes == 'true'
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add .
-        git commit -m "🤖 Auto-format code with Black [skip ci]" || exit 0
-        git push
+        echo "📝 Обнаружены изменения форматирования!"
+        echo ""
+        echo "🔧 Для исправления выполните локально:"
+        echo "   black ."
+        echo "   git add ."
+        echo "   git commit -m 'Format code with Black'"
+        echo "   git push"
+        echo ""
+        echo "💡 Или установите pre-commit хуки для автоматического форматирования:"
+        echo "   pip install pre-commit"
+        echo "   pre-commit install"
         
     # Мягкий линтинг (предупреждения, не ошибки)
     - name: Code quality check (warnings only)
