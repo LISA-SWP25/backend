@@ -14,7 +14,161 @@ from app.deps import get_db
 from app.models.models import Role, BehaviorTemplate, Agent, AgentActivity
 from app.schemas import AgentConfig, AgentResponse, AgentGenerateResponse
 
+from app.core.ssh_manager import SSHDeploymentManager
+from app.schemas import DeploymentRequest, DeploymentResponse
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 router = APIRouter()
+
+executor = ThreadPoolExecutor(max_workers=5)
+
+@router.post("/agents/{agent_id}/deploy/ssh", response_model=DeploymentResponse)
+async def deploy_agent_ssh(
+    agent_id: str, 
+    deployment: DeploymentRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Deploy agent to remote host via SSH"""
+    
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Update agent status
+    agent.status = "deploying"
+    db.commit()
+    
+    # Schedule deployment in background
+    background_tasks.add_task(
+        _perform_ssh_deployment,
+        agent_id=agent_id,
+        agent=agent,
+        deployment=deployment,
+        db=db
+    )
+    
+    return DeploymentResponse(
+        agent_id=agent_id,
+        status="deployment_initiated",
+        message=f"Deploying agent to {deployment.host}",
+        deployment_id=str(uuid.uuid4())
+    )
+
+async def _perform_ssh_deployment(
+    agent_id: str,
+    agent: Agent,
+    deployment: DeploymentRequest,
+    db: Session
+):
+    """Perform actual SSH deployment in background"""
+    ssh_manager = SSHDeploymentManager()
+    
+    try:
+        # Connect to target host
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            executor,
+            ssh_manager.connect,
+            deployment.host,
+            deployment.username,
+            deployment.password,
+            deployment.ssh_key_path
+        )
+        
+        # Prepare agent config
+        agent_config = {
+            "agent_id": agent_id,
+            "name": agent.name,
+            "role": agent.role.name,
+            "template": agent.template.template_data,
+            "server_url": os.getenv("LISA_SERVER_URL", "http://localhost:8000"),
+            "check_in_interval": 60,
+            "stealth_level": agent.stealth_level
+        }
+        
+        # Get agent binary path based on OS
+        agent_binary = f"agents/binaries/lisa_agent_{agent.os_type.lower()}"
+        
+        # Deploy
+        await loop.run_in_executor(
+            executor,
+            ssh_manager.deploy_agent,
+            agent_config,
+            agent_binary
+        )
+        
+        # Update status
+        agent.status = "deployed"
+        agent.injection_target = deployment.host
+        agent.last_seen = datetime.utcnow()
+        db.commit()
+        
+        # Store deployment info
+        activity = AgentActivity(
+            agent_id=agent.id,
+            activity_type="deployment",
+            activity_data={
+                "host": deployment.host,
+                "method": "ssh",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+        db.add(activity)
+        db.commit()
+        
+    except Exception as e:
+        logger.error(f"Deployment failed for {agent_id}: {str(e)}")
+        agent.status = "deployment_failed"
+        db.commit()
+        
+        # Log failure
+        activity = AgentActivity(
+            agent_id=agent.id,
+            activity_type="deployment_error",
+            activity_data={
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+        db.add(activity)
+        db.commit()
+    
+    finally:
+        ssh_manager.disconnect()
+
+@router.get("/agents/{agent_id}/logs")
+async def get_agent_logs(
+    agent_id: str,
+    lines: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Retrieve agent logs from remote host"""
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    if not agent.injection_target:
+        raise HTTPException(status_code=400, detail="Agent not deployed")
+    
+    # This would connect to the agent's host and retrieve logs
+    # For now, return recent activities
+    activities = db.query(AgentActivity).filter(
+        AgentActivity.agent_id == agent.id
+    ).order_by(desc(AgentActivity.timestamp)).limit(lines).all()
+    
+    return {
+        "agent_id": agent_id,
+        "logs": [
+            {
+                "timestamp": act.timestamp,
+                "type": act.activity_type,
+                "data": act.activity_data
+            } for act in activities
+        ]
+    }
+
 
 class ConfigRequest(BaseModel):
     username: str = "john_doe"
