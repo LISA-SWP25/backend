@@ -8,16 +8,16 @@ from app.schemas import ApplicationTemplateCreate, ApplicationTemplateResponse, 
 
 router = APIRouter()
 
-@router.post(\"/application-templates\", response_model=ApplicationTemplateResponse)
+@router.post("/application-templates", response_model=ApplicationTemplateResponse)
 def create_application_template(template: ApplicationTemplateCreate, db: Session = Depends(get_db)):
-    \"\"\"Создать новый шаблон приложения\"\"\"
-    # Проверяем уникальность имени
+    """Create new application template"""
+    # Check if template name already exists
     existing = db.query(ApplicationTemplate).filter(
         ApplicationTemplate.name == template.name,
         ApplicationTemplate.is_active == True
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f\"Template '{template.name}' already exists\")
+        raise HTTPException(status_code=400, detail=f"Template '{template.name}' already exists")
     
     db_template = ApplicationTemplate(
         name=template.name,
@@ -34,7 +34,7 @@ def create_application_template(template: ApplicationTemplateCreate, db: Session
     db.refresh(db_template)
     return db_template
 
-@router.get(\"/application-templates\", response_model=List[ApplicationTemplateResponse])
+@router.get("/application-templates", response_model=List[ApplicationTemplateResponse])
 def list_application_templates(
     category: Optional[str] = None,
     os_type: Optional[str] = None,
@@ -42,7 +42,7 @@ def list_application_templates(
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    \"\"\"Получить список шаблонов приложений\"\"\"
+    """Get list of application templates"""
     query = db.query(ApplicationTemplate).filter(ApplicationTemplate.is_active == True)
     
     if category:
@@ -53,32 +53,32 @@ def list_application_templates(
     templates = query.offset(skip).limit(limit).all()
     return templates
 
-@router.get(\"/application-templates/{template_id}\", response_model=ApplicationTemplateResponse)
+@router.get("/application-templates/{template_id}", response_model=ApplicationTemplateResponse)
 def get_application_template(template_id: int, db: Session = Depends(get_db)):
-    \"\"\"Получить шаблон приложения по ID\"\"\"
+    """Get application template by ID"""
     template = db.query(ApplicationTemplate).filter(
         ApplicationTemplate.id == template_id,
         ApplicationTemplate.is_active == True
     ).first()
     if not template:
-        raise HTTPException(status_code=404, detail=\"Template not found\")
+        raise HTTPException(status_code=404, detail="Template not found")
     return template
 
-@router.put(\"/application-templates/{template_id}\", response_model=ApplicationTemplateResponse)
+@router.put("/application-templates/{template_id}", response_model=ApplicationTemplateResponse)
 def update_application_template(
     template_id: int, 
     template_update: ApplicationTemplateUpdate, 
     db: Session = Depends(get_db)
 ):
-    \"\"\"Обновить шаблон приложения\"\"\"
+    """Update application template"""
     template = db.query(ApplicationTemplate).filter(
         ApplicationTemplate.id == template_id,
         ApplicationTemplate.is_active == True
     ).first()
     if not template:
-        raise HTTPException(status_code=404, detail=\"Template not found\")
+        raise HTTPException(status_code=404, detail="Template not found")
     
-    # Проверяем уникальность имени если оно изменяется
+    # Check name uniqueness if changing
     if template_update.name and template_update.name != template.name:
         existing = db.query(ApplicationTemplate).filter(
             ApplicationTemplate.name == template_update.name,
@@ -86,9 +86,9 @@ def update_application_template(
             ApplicationTemplate.id != template_id
         ).first()
         if existing:
-            raise HTTPException(status_code=400, detail=\"Template name already exists\")
+            raise HTTPException(status_code=400, detail="Template name already exists")
     
-    # Обновляем поля
+    # Update fields
     update_data = template_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(template, field, value)
@@ -97,26 +97,26 @@ def update_application_template(
     db.refresh(template)
     return template
 
-@router.delete(\"/application-templates/{template_id}\")
+@router.delete("/application-templates/{template_id}")
 def delete_application_template(template_id: int, db: Session = Depends(get_db)):
-    \"\"\"Удалить шаблон приложения (мягкое удаление)\"\"\"
+    """Delete application template (soft delete)"""
     template = db.query(ApplicationTemplate).filter(
         ApplicationTemplate.id == template_id,
         ApplicationTemplate.is_active == True
     ).first()
     if not template:
-        raise HTTPException(status_code=404, detail=\"Template not found\")
+        raise HTTPException(status_code=404, detail="Template not found")
     
     template.is_active = False
     db.commit()
-    return {\"message\": f\"Template '{template.name}' deleted successfully\"}
+    return {"message": f"Template '{template.name}' deleted successfully"}
 
-@router.get(\"/application-templates/categories\")
+@router.get("/application-templates/categories")
 def get_template_categories(db: Session = Depends(get_db)):
-    \"\"\"Получить список всех категорий шаблонов\"\"\"
+    """Get list of all template categories"""
     categories = db.query(ApplicationTemplate.category).filter(
         ApplicationTemplate.is_active == True,
         ApplicationTemplate.category.isnot(None)
     ).distinct().all()
     
-    return {\"categories\": [cat[0] for cat in categories if cat[0]]}
+    return {"categories": [cat[0] for cat in categories if cat[0]]}
