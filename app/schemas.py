@@ -8,13 +8,7 @@ from enum import Enum
 class OSType(str, Enum):
     WINDOWS = "windows"
     LINUX = "linux"
-    MACOS = "macos"
-
-class StealthLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
+    
 # Role schemas
 class RoleBase(BaseModel):
     name: str
@@ -90,7 +84,6 @@ class AgentConfig(BaseModel):
     template_id: int
     os_type: str
     injection_target: str
-    stealth_level: str = "medium"
     custom_config: Optional[Dict] = {}
 
 class AgentGenerateResponse(BaseModel):
@@ -241,3 +234,37 @@ class BuildLogsResponse(BaseModel):
     build_id: str
     logs: List[BuildLogEntry]
     total_lines: int
+
+# ApplicationTemplate schemas
+class ApplicationTemplateBase(BaseModel):
+    name: str
+    display_name: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    version: str = \"1.0\"
+    author: Optional[str] = None
+    template_config: Dict
+    os_type: str = \"linux\"
+
+class ApplicationTemplateCreate(ApplicationTemplateBase):
+    pass
+
+class ApplicationTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    display_name: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    version: Optional[str] = None
+    author: Optional[str] = None
+    template_config: Optional[Dict] = None
+    os_type: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class ApplicationTemplateResponse(ApplicationTemplateBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
