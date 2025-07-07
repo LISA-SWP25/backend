@@ -1,4 +1,3 @@
-from app.api.endpoints import heartbeat
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 from datetime import datetime
@@ -31,7 +30,8 @@ class RoleResponse(RoleBase):
 
     class Config:
         from_attributes = True
-
+        
+# HEARTBEAT SCHEMAS !
 class AgentHeartbeatRequest(BaseModel):
     timestamp: datetime
     agent_id: str
@@ -52,10 +52,10 @@ class AgentHeartbeatResponse(BaseModel):
     next_heartbeat_in: int
     commands: Optional[List[Dict]] = []
 
-# Behavior Template schemas
+# Behavior Template schemas 
 class BehaviorTemplateBase(BaseModel):
     name: str
-    description: str
+    description: str  
     os_type: str
     template_data: Dict
 
@@ -64,7 +64,7 @@ class BehaviorTemplateCreate(BehaviorTemplateBase):
 
 class BehaviorTemplateUpdate(BaseModel):
     name: Optional[str] = None
-    description: Optional[str] = None
+    description: Optional[str] = None 
     os_type: Optional[str] = None
     template_data: Optional[Dict] = None
     is_active: Optional[bool] = None
@@ -84,6 +84,7 @@ class AgentConfig(BaseModel):
     template_id: int
     os_type: str
     injection_target: str
+    stealth_level: Optional[int] = 1  # Add default
     custom_config: Optional[Dict] = {}
 
 class AgentGenerateResponse(BaseModel):
@@ -213,17 +214,6 @@ class AgentBuildResponse(BaseModel):
     created_at: datetime
     estimated_completion: Optional[datetime] = None
 
-# Build Status schemas
-class BuildStatusResponse(BaseModel):
-    build_id: str
-    status: str
-    progress: int
-    message: str
-    created_at: datetime
-    completed_at: Optional[datetime] = None
-    download_url: Optional[str] = None
-    error: Optional[str] = None
-
 # Build Log schemas  
 class BuildLogEntry(BaseModel):
     timestamp: datetime
@@ -241,10 +231,10 @@ class ApplicationTemplateBase(BaseModel):
     display_name: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
-    version: str = \"1.0\"
+    version: str = "1.0"
     author: Optional[str] = None
     template_config: Dict
-    os_type: str = \"linux\"
+    os_type: str = "linux"
 
 class ApplicationTemplateCreate(ApplicationTemplateBase):
     pass
