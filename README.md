@@ -1,7 +1,4 @@
-# backend
-# LISA
-
-**Legitimate Infrastructure Simulation Agent - Backend & CI/CD**
+#  ![telegram-cloud-photo-size-2-5431661620049868588-m](https://github.com/user-attachments/assets/e29ca5cb-c40c-4da0-8b8d-b63a37749c04) LISA: Backend 
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/your-org/lisa)
 [![Python](https://img.shields.io/badge/python-3.11+-green)](https://www.python.org/)
