@@ -11,6 +11,7 @@ class Role(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    agents = relationship("Agent", back_populates="role")
 
 class ApplicationTemplate(Base):
     __tablename__ = 'applications_template'
@@ -28,6 +29,34 @@ class ApplicationTemplate(Base):
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
+class BehaviorTemplate(Base):
+    __tablename__ = 'behavior_templates'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text)  # This was missing!
+    os_type = Column(String(20), nullable=False, default='linux')
+    template_data = Column(JSON, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    agents = relationship("Agent", back_populates="template")
+
+class AgentBuild(Base):
+    __tablename__ = 'agent_builds'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(Integer, ForeignKey('agents.id'), nullable=False)
+    build_config = Column(JSON)
+    build_status = Column(String(20), default='pending')  # pending, building, ready, failed
+    binary_path = Column(String(500))
+    binary_size = Column(Integer)
+    build_log = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    completed_at = Column(TIMESTAMP)
+    
+    agent = relationship("Agent", back_populates="builds")
+    
 class Agent(Base):
     __tablename__ = 'agents'
     id = Column(Integer, primary_key=True, index=True)
@@ -38,8 +67,19 @@ class Agent(Base):
     config = Column(JSON)
     last_seen = Column(TIMESTAMP)
     last_activity = Column(String(255))
+    injection_target = Column(String(200))
+    stealth_level = Column(Integer, default=1)
+    
+    role_id = Column(Integer, ForeignKey('roles.id'))
+    template_id = Column(Integer, ForeignKey('behavior_templates.id'))
+    
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    role = relationship("Role", back_populates="agents")
+    template = relationship("BehaviorTemplate", back_populates="agents")
+    activities = relationship("AgentActivity", back_populates="agent")
+    builds = relationship("AgentBuild", back_populates="agent")
 
 class AgentActivity(Base):
     __tablename__ = 'agent_activities'
@@ -48,3 +88,4 @@ class AgentActivity(Base):
     activity_type = Column(String(50))
     activity_data = Column(JSON)
     timestamp = Column(TIMESTAMP, server_default=func.now())
+    agent = relationship("Agent", back_populates="activities")
