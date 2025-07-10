@@ -1,118 +1,478 @@
 #  ![telegram-cloud-photo-size-2-5431661620049868588-m](https://github.com/user-attachments/assets/e29ca5cb-c40c-4da0-8b8d-b63a37749c04) LISA: Backend 
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/your-org/lisa)
-[![Python](https://img.shields.io/badge/python-3.11+-green)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-orange)](https://fastapi.tiangolo.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+# LISA Backend API
 
-##  Overview
+**Legitimate Infrastructure Simulation Agent - Management API**
 
-LISA is a system for creating and managing agents that simulate legitimate user activity in cyber ranges and SOC training environments. The backend provides APIs for role management, behavior template creation, agent configuration generation, and CI/CD automation.
+A FastAPI-based backend system for managing and monitoring software agents that simulate legitimate user activity on target systems.
 
+![Python](https://img.shields.io/badge/python-v3.11+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg)
 
-## Getting started
+##  Features
 
-### Installation
+- **Agent Management**: Create, configure, and deploy software agents
+- **Real-time Monitoring**: WebSocket-based live agent monitoring
+- **Role-based Configuration**: Define user roles and behaviors
+- **Template System**: Reusable behavior and application templates
+- **CI/CD Integration**: Automated agent building and deployment
+- **Heartbeat Monitoring**: Real-time agent health and activity tracking
+- **PostgreSQL/SQLite Support**: Flexible database backend
 
-1. **Clone the repository**
+##  Table of Contents
+
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [API Documentation](#api-documentation)
+- [Database Schema](#database-schema)
+- [Docker Setup](#docker-setup)
+- [Development](#development)
+- [Agent Integration](#agent-integration)
+
+##  Quick Start
+
+### Using Docker (Recommended)
+
 ```bash
-git clone https://github.com/LISA-SWP25/backend.git
-cd lisa/backend 
+# Clone the repository
+git clone <your-repo-url>
+cd lisa/backend
+
+# Start with Docker Compose
+docker-compose up -d
+
+# Access the API documentation
+open http://localhost:8000/docs
 ```
-2. **Setup virtual environment**
-```bash 
-python3 -m venv venv
-source venv/bin/activate  # On macOS/Linux
-```
-3. **Install dependencies**
+
+### Local Development
+
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the server
+uvicorn app.main:app --reload
+
+# API available at http://localhost:8000
 ```
 
-4. **Setup PostgreSQL**
-```bash 
-createdb lisa_dev
-createuser lisa --pwprompt
-# Password: pass
+### Core Components
+
+- **Agent Manager**: Handles agent lifecycle and configuration
+- **Heartbeat System**: Monitors agent health and activity
+- **Template Engine**: Manages behavior and application templates
+- **Build Pipeline**: Compiles agents for deployment
+- **Monitoring Dashboard**: Real-time system overview
+
+##  Installation
+
+### Prerequisites
+
+- Python 3.11+
+- PostgreSQL 15+ (SQLite fallback available)
+- Docker & Docker Compose 
+
+### Backend Setup
+
+1. **Clone and Install**
+   ```bash
+   git clone <your-repo-url>
+   cd lisa/backend
+   pip install -r requirements.txt
+   ```
+
+2. **Database Configuration**
+   ```python
+   # app/database.py
+   DATABASE_URL = 'postgresql://lisa:pass@localhost:5432/lisa_dev'
+   ```
+
+3. **Environment Variables**
+   ```bash
+   export DATABASE_URL="postgresql://lisa:pass@localhost:5432/lisa_dev"
+   export CORS_ORIGINS="http://localhost:3000"
+   ```
+
+4. **Run the Server**
+   ```bash
+   source venv/bin/activate
+   uvicorn app.main:app --reload
+   ```
+
+##  API Documentation
+
+### Core Endpoints
+
+#### Agent Management
+```http
+POST   /api/agents/generate              # Create agent configuration
+GET    /api/agents                       # List all agents
+GET    /api/agents/{agent_id}/status     # Get agent status
+POST   /api/agents/{agent_id}/deploy     # Deploy agent
+GET    /api/agents/{agent_id}/config     # Download agent config
 ```
 
-5. **Start the server**
-```bash 
-uvicorn app.main:app --reload --port 8000
+#### Heartbeat & Monitoring
+```http
+POST   /api/agents/heartbeat             # Agent heartbeat (main endpoint)
+GET    /api/agents/active                # List active agents
+GET    /api/agents/statistics/summary    # System statistics
+GET    /api/monitoring/overview          # Monitoring dashboard
 ```
 
-### Verify Installation
-- API Health: http://localhost:8000/api/health
-- API Documentation: http://localhost:8000/docs
-- System Stats: http://localhost:8000/api/stats
+#### Templates & Roles
+```http
+POST   /api/roles                        # Create user role
+GET    /api/roles                        # List roles
+POST   /api/behavior-templates           # Create behavior template
+GET    /api/behavior-templates           # List templates
+POST   /api/application-templates        # Create app template
+```
 
+#### System & Health
+```http
+GET    /api/health                       # System health check
+GET    /api/stats                        # System statistics
+WS     /api/ws/agents/{agent_id}         # WebSocket monitoring
+```
 
-## API Documentation
+### Agent Heartbeat Format
 
-| Method |    Endpoint    |    Description    |
-| ------ |     ------     |       ------      |
-| POST   | /api/roles     | Create a new role |
-| GET    | /api/roles     | List all roles    | 
-| GET    | /api/roles/{id}| Get role details  | 
-| PUT    | /api/roles/{id}| Update role       | 
-| DELETE | /api/roles/{id}| Delete role       | 
+```json
+POST /api/agents/heartbeat
+{
+  "timestamp": "2025-01-15T14:30:45.123456",
+  "agent_id": "USR0012345",
+  "username": "john_doe",
+  "role": "Junior Developer",
+  "department": "Development",
+  "location": "Headquarters",
+  "system_info": {
+    "hostname": "workstation-01",
+    "platform": "Linux-5.15.0-56-generic-x86_64",
+    "python_version": "3.10.6",
+    "cpu_count": 8,
+    "agent_version": "1.0.0"
+  },
+  "status": "active",
+  "statistics": {
+    "agent_uptime": 3600.5,
+    "current_app": "Visual Studio Code",
+    "plugin_mode": true,
+    "total_plugins": 5,
+    "available_apps": 7
+  },
+  "current_activity": {
+    "application": "Visual Studio Code",
+    "is_plugin": true
+  }
+}
+```
 
-## Behavior Templates
+##  Database Schema
 
-| Method |    Endpoint    |    Description    |
-| ------ |     ------     |       ------      |
-| POST   | /api/behavior-templates     | Create behavior template |
-| GET    | /api/behavior-templates     | List templates   | 
-| GET    | /api/behavior-templates/{id}| Get template details  | 
+### Core Tables
 
-## Agent Management
-| Method |    Endpoint    |    Description    |
-| ------ |     ------     |       ------      |
-| POST   | /api/agents/generate     | Generate agent configuration |
-| GET    | /api/agents     | List all agents    | 
-| GET    | /api/agents/{id}/status| Get agent status  | 
-| GET    | /api/agents/{id}/config/download| Download config file       | 
+```sql
+-- Agents table
+agents (
+  id SERIAL PRIMARY KEY,
+  agent_id VARCHAR(50) UNIQUE,
+  name VARCHAR(100),
+  status VARCHAR(20),
+  os_type VARCHAR(20),
+  last_seen TIMESTAMP,
+  config JSON
+)
 
-## CI/CD Pipeline
+-- Agent Activities (heartbeats, logs)
+agent_activities (
+  id SERIAL PRIMARY KEY,
+  agent_id INTEGER REFERENCES agents(id),
+  activity_type VARCHAR(50),
+  activity_data JSON,
+  timestamp TIMESTAMP
+)
 
-| Method |    Endpoint    |    Description    |
-| ------ |     ------     |       ------      |
-| POST   | /api/builds    | Trigger agent build |
-| GET    | /api/builds     | List builds    | 
-| GET    | /api/builds/{id}| Get build status | 
+-- Roles and Templates
+roles (id, name, description, category)
+behavior_templates (id, name, description, template_data)
+application_templates (id, name, template_config)
+```
 
-## System
+##  Docker Setup
 
-| Method |    Endpoint    |    Description    |
-| ------ |     ------     |       ------      |
-| GET    | /api/health     | System health check |
-| GET    | /api/stats     | System statistics    | 
-| GET    | /api/demo/workflow| Demo workflow  | 
+### Full Stack Deployment
 
+```yaml
+# docker-compose.yml
+services:
+  # PostgreSQL 
+  lisa_postgres_quick:
+    image: postgres:15-alpine
+    container_name: lisa_postgres_quick
+    environment:
+      POSTGRES_DB: lisa_dev
+      POSTGRES_USER: lisa
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lisa_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lisa -d lisa_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-## Usage Examples
+  # Backend 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.fast 
+    container_name: lisa_backend
+    environment:
+      - DATABASE_URL=postgresql://lisa:pass@lisa_postgres_quick:5432/lisa_dev
+      - CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - lisa_network
+    depends_on:
+      lisa_postgres_quick:
+        condition: service_healthy
 
-### Create a Role
+  # Frontend 
+  frontend:
+    image: nginx:alpine
+    container_name: lisa_frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend-static:/usr/share/nginx/html:ro
+    networks:
+      - lisa_network
+    depends_on:
+      - backend
+
+# Agent Deployer 
+agent-deployer:
+  image: python:3.11-slim
+  container_name: lisa_agent_deployer
+  working_dir: /app
+  command: >
+    sh -c "pip install fastapi uvicorn --no-cache-dir && 
+           python -c 'from fastapi import FastAPI; import uvicorn; app = FastAPI(); app.add_api_route(\"/\", lambda: {\"status\": \"running\", \"service\": \"agent-deployer\"}); app.add_api_route(\"/health\", lambda: {\"status\": \"healthy\"}); uvicorn.run(app, host=\"0.0.0.0\", port=8001)'"
+  ports:
+    - "8001:8001"
+  networks:
+    - lisa_network
+
+networks:
+  lisa_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+```
+
+### Commands
+
 ```bash
-curl -X POST "http://localhost:8000/api/roles" \
--H "Content-Type: application/json" \
--d '{
-  "name": "python_developer",
-  "description": "Python developer working on web applications",
-  "category": "developer"
-}'
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f backend
+
+# Stop services
+docker-compose down
+
+# Rebuild and restart
+docker-compose up --build -d
 ```
 
-### Generate Agent Configuration
+## Development
+
+### Running Tests
+
 ```bash
-curl -X POST "http://localhost:8000/api/agents/generate" \
--H "Content-Type: application/json" \
--d '{
-  "name": "Dev Agent 001",
-  "role_id": 1,
-  "template_id": 1,
-  "os_type": "linux",
-  "stealth_level": "medium"
-}'
+# Install test dependencies
+pip install pytest pytest-asyncio httpx
+
+# Run tests
+pytest
+
+# Run with coverage
+pytest --cov=app tests/
 ```
+
+### Adding New Endpoints
+
+1. Create endpoint in `app/api/endpoints/`
+2. Add route to `app/main.py`
+3. Define schemas in `app/schemas.py`
+4. Update database models if needed
+
+##  Agent Integration
+
+### Agent Heartbeat Integration
+
+```python
+import requests
+import time
+
+def send_heartbeat(agent_data):
+    response = requests.post(
+        "http://localhost:8000/api/agents/heartbeat",
+        json=agent_data,
+        headers={"Content-Type": "application/json"}
+    )
+    return response.json()
+
+# Example usage
+while True:
+    heartbeat_data = {
+        "agent_id": "USR0012345",
+        "username": "john_doe",
+        "status": "active",
+        "timestamp": datetime.utcnow().isoformat(),
+        # ... other fields
+    }
+    
+    result = send_heartbeat(heartbeat_data)
+    time.sleep(60)  # Send every minute
+```
+
+### Agent Configuration Download
+
+```bash
+# Download agent configuration
+curl -o agent_config.json \
+  "http://localhost:8000/api/agents/USR0012345/config"
+
+# Deploy agent with configuration
+python agent_deployer.py --config agent_config.json
+```
+
+##  Configuration
+
+### Environment Variables
+
+```bash
+DATABASE_URL="postgresql://user:pass@host:port/database"
+CORS_ORIGINS="http://localhost:3000,http://localhost:5173"
+API_KEY="your-api-key-here"
+LOG_LEVEL="INFO"
+```
+
+### Database Configuration
+
+```python
+# For PostgreSQL
+DATABASE_URL = 'postgresql://lisa:pass@localhost:5432/lisa_dev'
+
+# For SQLite (fallback)
+DATABASE_URL = 'sqlite:///./fallback.db'
+```
+
+##  Monitoring & Observability
+
+### Health Check
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+### System Statistics
+
+```bash
+curl http://localhost:8000/api/stats
+```
+
+### WebSocket Monitoring
+
+```javascript
+const ws = new WebSocket('ws://localhost:8000/api/ws/agents/USR0012345');
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Agent update:', data);
+};
+```
+
+##  Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Failed**
+   ```bash
+   # Check PostgreSQL is running
+   docker ps | grep postgres
+   
+   # Check connection
+   psql -h localhost -U lisa -d lisa_dev
+   ```
+
+2. **Port Already in Use**
+   ```bash
+   # Find process using port 8000
+   lsof -i :8000
+   
+   # Kill process
+   kill -9 <PID>
+   ```
+
+3. **Agent Not Receiving Config**
+   ```bash
+   # Check agent endpoint
+   curl http://localhost:8000/api/agents/USR0012345/status
+   
+   # Verify agent is registered
+   curl http://localhost:8000/api/agents
+   ```
+
+##  API Response Examples
+
+### Successful Heartbeat Response
+```json
+{
+  "status": "received",
+  "agent_id": "USR0012345",
+  "timestamp": "2025-01-15T14:30:45.123456",
+  "message": "Heartbeat processed successfully",
+  "next_heartbeat_in": 86400
+}
+```
+
+### Agent Status Response
+```json
+{
+  "agent": {
+    "agent_id": "USR0012345",
+    "name": "john_doe",
+    "status": "active",
+    "last_seen": "2025-01-15T14:30:45.123456",
+    "role": "Junior Developer"
+  },
+  "recent_activities": [...]
+}
+```
+
+##  Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+##  License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
