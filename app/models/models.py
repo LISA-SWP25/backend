@@ -11,7 +11,10 @@ class Role(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
     agents = relationship("Agent", back_populates="role")
+    behavior_templates = relationship("BehaviorTemplate", back_populates="role")
 
 class ApplicationTemplate(Base):
     __tablename__ = 'applications_template'
@@ -34,29 +37,21 @@ class BehaviorTemplate(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
-    description = Column(Text)  # This was missing!
+    description = Column(Text)
     os_type = Column(String(20), nullable=False, default='linux')
     template_data = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
+    
+    # NEW: Added role_id foreign key from migration script
+    role_id = Column(Integer, ForeignKey('roles.id'), nullable=True)
+    
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
     agents = relationship("Agent", back_populates="template")
+    role = relationship("Role", back_populates="behavior_templates")
 
-class AgentBuild(Base):
-    __tablename__ = 'agent_builds'
-    
-    id = Column(Integer, primary_key=True, index=True)
-    agent_id = Column(Integer, ForeignKey('agents.id'), nullable=False)
-    build_config = Column(JSON)
-    build_status = Column(String(20), default='pending')  # pending, building, ready, failed
-    binary_path = Column(String(500))
-    binary_size = Column(Integer)
-    build_log = Column(Text)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    completed_at = Column(TIMESTAMP)
-    
-    agent = relationship("Agent", back_populates="builds")
-    
 class Agent(Base):
     __tablename__ = 'agents'
     id = Column(Integer, primary_key=True, index=True)
@@ -70,16 +65,53 @@ class Agent(Base):
     injection_target = Column(String(200))
     stealth_level = Column(Integer, default=1)
     
+    # Foreign keys
     role_id = Column(Integer, ForeignKey('roles.id'))
     template_id = Column(Integer, ForeignKey('behavior_templates.id'))
+    
+    version_info = Column(JSON, default=lambda: {})
+    build_time = Column(Integer)  # build time in seconds
     
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
+    # Relationships
     role = relationship("Role", back_populates="agents")
     template = relationship("BehaviorTemplate", back_populates="agents")
     activities = relationship("AgentActivity", back_populates="agent")
     builds = relationship("AgentBuild", back_populates="agent")
+
+class AgentBuild(Base):
+    __tablename__ = 'agent_builds'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(Integer, ForeignKey('agents.id', ondelete='CASCADE'), nullable=False)
+    build_config = Column(JSON, nullable=False)
+    build_status = Column(String(50), nullable=False, default='pending')  # pending, building, completed, failed
+    binary_path = Column(Text)
+    binary_size = Column(Integer)
+    build_log = Column(Text)
+    build_time = Column(Integer)  # build time in seconds
+    
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    completed_at = Column(TIMESTAMP)
+    
+    # Relationships
+    agent = relationship("Agent", back_populates="builds")
+
+class AgentUpdateLog(Base):
+    """NEW: Agent update logs table from migration script"""
+    __tablename__ = 'agent_update_logs'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, nullable=False)
+    user_id = Column(Text, nullable=False)
+    old_version = Column(Text)
+    new_version = Column(Text)
+    update_status = Column(String(50), nullable=False)  # 'started', 'completed', 'failed'
+    update_log = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
 
 class AgentActivity(Base):
     __tablename__ = 'agent_activities'
@@ -88,4 +120,6 @@ class AgentActivity(Base):
     activity_type = Column(String(50))
     activity_data = Column(JSON)
     timestamp = Column(TIMESTAMP, server_default=func.now())
+    
+    # Relationships
     agent = relationship("Agent", back_populates="activities")
