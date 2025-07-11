@@ -19,7 +19,7 @@ A FastAPI-based backend system for managing and monitoring software agents that 
 - **Template System**: Reusable behavior and application templates
 - **CI/CD Integration**: Automated agent building and deployment
 - **Heartbeat Monitoring**: Real-time agent health and activity tracking
-- **PostgreSQL/SQLite Support**: Flexible database backend
+- **PostgreSQL Support**: Database backend
 
 ##  Table of Contents
 
@@ -72,7 +72,7 @@ uvicorn app.main:app --reload
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 15+ (SQLite fallback available)
+- PostgreSQL 15+ 
 - Docker & Docker Compose 
 
 ### Backend Setup
