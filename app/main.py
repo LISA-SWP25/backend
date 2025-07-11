@@ -6,7 +6,7 @@ import uuid
 
 # Database imports
 from app.database import Base, engine
-from app.api.endpoints import roles, templates, agents, builds, system, monitoring, heartbeat, applications
+from app.api.endpoints import roles, templates, agents, builds, system, heartbeat, applications
 from app.api import websocket
 
 # Create tables
@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==================== DASHBOARD DATA ====================
+# DASHBOARD DATA 
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats():
@@ -49,9 +49,8 @@ app.include_router(roles.router, prefix="/api", tags=["Roles"])
 app.include_router(templates.router, prefix="/api", tags=["Templates"])
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
 app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
-app.include_router(builds.router, prefix="/api", tags=["CI/CD"])
+app.include_router(builds.router, prefix="/api", tags=["CI/CD (Builds)"])
 app.include_router(system.router, prefix="/api", tags=["System"])
-app.include_router(monitoring.router, prefix="/api", tags=["Monitoring"])
 app.include_router(websocket.router, prefix="/api", tags=["WebSocket"])
 app.include_router(applications.router, prefix="/api", tags=["Applications"])
 
