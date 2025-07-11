@@ -10,18 +10,25 @@ class OSType(str, Enum):
     
 # Role schemas
 class RoleBase(BaseModel):
-    name: str
-    description: str
-    category: str
+    name: str = Field(..., example="Junior Developer")
+    description: str = Field(..., example="Entry-level software developer")
+    category: str = Field(..., example="Development")
 
 class RoleCreate(RoleBase):
-    pass
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Junior Developer",
+                "description": "Entry-level software developer with 0-2 years experience",
+                "category": "Development"
+            }
+        }
 
 class RoleUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    is_active: Optional[bool] = None
+    name: Optional[str] = Field(None, example="Senior Developer")
+    description: Optional[str] = Field(None, example="Experienced software developer")
+    category: Optional[str] = Field(None, example="Development")
+    is_active: Optional[bool] = Field(None, example=True)
 
 class RoleResponse(RoleBase):
     id: int
@@ -52,24 +59,69 @@ class AgentHeartbeatResponse(BaseModel):
     next_heartbeat_in: int
     commands: Optional[List[Dict]] = []
 
-# Behavior Template schemas - UPDATED
+# Behavior Template schemas - UPDATED WITH EXAMPLES
 class BehaviorTemplateBase(BaseModel):
-    name: str
-    role_id: int
-    template_data: Dict
-    os_type: str
-    version: str = "1.0"
+    name: str = Field(..., example="Standard Developer Behavior")
+    role_id: int = Field(..., example=1, description="ID of the role this template belongs to")
+    template_data: Dict = Field(..., example={
+        "work_schedule": {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "breaks": [{"start": "13:00", "duration_minutes": 60}]
+        },
+        "applications_used": [
+            "Visual Studio Code",
+            "Google Chrome", 
+            "Slack",
+            "Docker Desktop"
+        ],
+        "activity_pattern": "Regular office hours with lunch break",
+        "productivity_metrics": {
+            "code_sessions_per_day": "4-6",
+            "average_session_length": "45-90 minutes",
+            "break_frequency": "every 2 hours"
+        }
+    })
+    os_type: str = Field(..., example="linux")
+    version: str = Field(default="1.0", example="1.0")
 
 class BehaviorTemplateCreate(BehaviorTemplateBase):
-    pass
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Standard Developer Behavior",
+                "role_id": 1,
+                "template_data": {
+                    "work_schedule": {
+                        "start_time": "09:00",
+                        "end_time": "18:00",
+                        "breaks": [{"start": "13:00", "duration_minutes": 60}]
+                    },
+                    "applications_used": [
+                        "Visual Studio Code",
+                        "Google Chrome",
+                        "Slack",
+                        "Terminal"
+                    ],
+                    "activity_pattern": "Regular office hours with lunch break",
+                    "behavior_traits": {
+                        "typing_speed": "medium",
+                        "multitasking": True,
+                        "break_habits": "regular"
+                    }
+                },
+                "os_type": "linux",
+                "version": "1.0"
+            }
+        }
 
 class BehaviorTemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    role_id: Optional[int] = None
+    name: Optional[str] = Field(None, example="Updated Developer Behavior")
+    role_id: Optional[int] = Field(None, example=1)
     template_data: Optional[Dict] = None
-    os_type: Optional[str] = None
-    version: Optional[str] = None
-    is_active: Optional[bool] = None
+    os_type: Optional[str] = Field(None, example="linux")
+    version: Optional[str] = Field(None, example="1.1")
+    is_active: Optional[bool] = Field(None, example=True)
 
 class BehaviorTemplateResponse(BehaviorTemplateBase):
     id: int
@@ -80,15 +132,35 @@ class BehaviorTemplateResponse(BehaviorTemplateBase):
     class Config:
         from_attributes = True
 
-# Agent schemas - UPDATED
+# Agent schemas - UPDATED WITH EXAMPLES
 class AgentConfig(BaseModel):
-    name: str
-    role_id: int
-    template_id: int
-    os_type: str
-    injection_target: Optional[str] = None
-    stealth_level: str = "medium"
-    custom_config: Optional[Dict] = {}
+    name: str = Field(..., example="TestAgent01")
+    role_id: int = Field(..., example=1, description="ID of the role for this agent")
+    template_id: int = Field(..., example=1, description="ID of the behavior template")
+    os_type: str = Field(..., example="linux")
+    injection_target: Optional[str] = Field(None, example="dev-workstation-01")
+    stealth_level: str = Field(default="medium", example="medium")
+    custom_config: Optional[Dict] = Field(default={}, example={
+        "department": "Development",
+        "location": "Headquarters",
+        "custom_apps": ["IntelliJ IDEA"]
+    })
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "DevAgent01",
+                "role_id": 1,
+                "template_id": 1,
+                "os_type": "linux",
+                "injection_target": "dev-workstation-01",
+                "stealth_level": "medium",
+                "custom_config": {
+                    "department": "Development",
+                    "location": "Headquarters"
+                }
+            }
+        }
 
 class AgentGenerateResponse(BaseModel):
     agent_id: str
@@ -119,11 +191,11 @@ class AgentHeartbeat(BaseModel):
 
 # Deployment schemas
 class DeploymentRequest(BaseModel):
-    host: str
-    username: str
-    password: Optional[str] = None
-    ssh_key_path: Optional[str] = None
-    port: int = 22
+    host: str = Field(..., example="192.168.1.100")
+    username: str = Field(..., example="admin")
+    password: Optional[str] = Field(None, example="secure_password")
+    ssh_key_path: Optional[str] = Field(None, example="/home/user/.ssh/id_rsa")
+    port: int = Field(default=22, example=22)
 
 class DeploymentResponse(BaseModel):
     agent_id: str
@@ -133,9 +205,12 @@ class DeploymentResponse(BaseModel):
 
 # Build schemas - UPDATED
 class AgentBuildRequest(BaseModel):
-    agent_id: str
-    force_rebuild: bool = False
-    compilation_options: Optional[Dict] = {}
+    agent_id: str = Field(..., example="USR1234567")
+    force_rebuild: bool = Field(default=False, example=False)
+    compilation_options: Optional[Dict] = Field(default={}, example={
+        "optimization": "release",
+        "include_debug": False
+    })
 
 class AgentBuildResponse(BaseModel):
     id: int
@@ -200,17 +275,43 @@ class ErrorResponse(BaseModel):
 
 # ApplicationTemplate schemas
 class ApplicationTemplateBase(BaseModel):
-    name: str
-    display_name: Optional[str] = None
-    category: Optional[str] = None
-    description: Optional[str] = None
-    version: str = "1.0"
-    author: Optional[str] = None
-    template_config: Dict
-    os_type: str = "linux"
+    name: str = Field(..., example="Visual Studio Code")
+    display_name: Optional[str] = Field(None, example="VS Code")
+    category: Optional[str] = Field(None, example="Development Tools")
+    description: Optional[str] = Field(None, example="Code editor for development")
+    version: str = Field(default="1.0", example="1.0")
+    author: Optional[str] = Field(None, example="Microsoft")
+    template_config: Dict = Field(..., example={
+        "executable_path": "/usr/bin/code",
+        "startup_args": ["--disable-extensions"],
+        "window_behavior": {
+            "minimize_probability": 0.1,
+            "focus_duration_minutes": "15-45"
+        }
+    })
+    os_type: str = Field(default="linux", example="linux")
 
 class ApplicationTemplateCreate(ApplicationTemplateBase):
-    pass
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Visual Studio Code",
+                "display_name": "VS Code",
+                "category": "Development Tools",
+                "description": "Lightweight but powerful source code editor",
+                "version": "1.0",
+                "author": "Microsoft",
+                "template_config": {
+                    "executable_path": "/usr/bin/code",
+                    "startup_args": ["--disable-extensions"],
+                    "window_behavior": {
+                        "minimize_probability": 0.1,
+                        "focus_duration_minutes": "15-45"
+                    }
+                },
+                "os_type": "linux"
+            }
+        }
 
 class ApplicationTemplateUpdate(BaseModel):
     name: Optional[str] = None
