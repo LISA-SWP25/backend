@@ -7,6 +7,17 @@ from enum import Enum
 class OSType(str, Enum):
     WINDOWS = "windows"
     LINUX = "linux"
+
+class BuildStatus(str, Enum):
+    PENDING = "pending"
+    BUILDING = "building"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class UpdateStatus(str, Enum):
+    STARTED = "started"
+    COMPLETED = "completed"
+    FAILED = "failed"
     
 # Role schemas
 class RoleBase(BaseModel):
@@ -59,9 +70,10 @@ class AgentHeartbeatResponse(BaseModel):
     next_heartbeat_in: int
     commands: Optional[List[Dict]] = []
 
-# Behavior Template schemas - UPDATED WITH EXAMPLES
+# Behavior Template schemas - UPDATED WITH NEW role_id FIELD
 class BehaviorTemplateBase(BaseModel):
     name: str = Field(..., example="Standard Developer Behavior")
+    description: Optional[str] = Field(None, example="Standard behavior pattern for developers")
     role_id: int = Field(..., example=1, description="ID of the role this template belongs to")
     template_data: Dict = Field(..., example={
         "work_schedule": {
@@ -90,6 +102,7 @@ class BehaviorTemplateCreate(BehaviorTemplateBase):
         schema_extra = {
             "example": {
                 "name": "Standard Developer Behavior",
+                "description": "Standard behavior pattern for developers",
                 "role_id": 1,
                 "template_data": {
                     "work_schedule": {
@@ -117,6 +130,7 @@ class BehaviorTemplateCreate(BehaviorTemplateBase):
 
 class BehaviorTemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, example="Updated Developer Behavior")
+    description: Optional[str] = Field(None, example="Updated behavior pattern")
     role_id: Optional[int] = Field(None, example=1)
     template_data: Optional[Dict] = None
     os_type: Optional[str] = Field(None, example="linux")
@@ -132,7 +146,7 @@ class BehaviorTemplateResponse(BehaviorTemplateBase):
     class Config:
         from_attributes = True
 
-# Agent schemas - UPDATED WITH EXAMPLES
+# Agent schemas - UPDATED WITH NEW FIELDS
 class AgentConfig(BaseModel):
     name: str = Field(..., example="TestAgent01")
     role_id: int = Field(..., example=1, description="ID of the role for this agent")
@@ -144,6 +158,12 @@ class AgentConfig(BaseModel):
         "department": "Development",
         "location": "Headquarters",
         "custom_apps": ["IntelliJ IDEA"]
+    })
+    # NEW: Version info for agent updates
+    version_info: Optional[Dict] = Field(default={}, example={
+        "version_hash": "abc123def456",
+        "build_version": "1.0.0",
+        "last_updated": "2025-01-15T10:30:00Z"
     })
 
     class Config:
@@ -158,6 +178,10 @@ class AgentConfig(BaseModel):
                 "custom_config": {
                     "department": "Development",
                     "location": "Headquarters"
+                },
+                "version_info": {
+                    "version_hash": "abc123def456",
+                    "build_version": "1.0.0"
                 }
             }
         }
@@ -178,6 +202,11 @@ class AgentResponse(BaseModel):
     stealth_level: str
     last_seen: Optional[datetime]
     created_at: datetime
+    # NEW: Include version info and build time
+    version_info: Optional[Dict] = None
+    build_time: Optional[int] = None
+    template_id: Optional[int] = None
+    role_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -203,13 +232,14 @@ class DeploymentResponse(BaseModel):
     message: str
     deployment_id: str
 
-# Build schemas - UPDATED
+# Build schemas - UPDATED TO MATCH NEW AgentBuild MODEL
 class AgentBuildRequest(BaseModel):
     agent_id: str = Field(..., example="USR1234567")
     force_rebuild: bool = Field(default=False, example=False)
     compilation_options: Optional[Dict] = Field(default={}, example={
         "optimization": "release",
-        "include_debug": False
+        "include_debug": False,
+        "version_hash": "abc123def456"
     })
 
 class AgentBuildResponse(BaseModel):
@@ -220,12 +250,76 @@ class AgentBuildResponse(BaseModel):
     binary_path: Optional[str] = None
     binary_size: Optional[int] = None
     build_log: Optional[str] = None
-    build_time: Optional[int] = None
+    build_time: Optional[int] = None  # NEW: build time in seconds
     created_at: datetime
+    updated_at: datetime  # NEW: updated timestamp
     completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+# NEW: Agent Update Log schemas
+class AgentUpdateLogBase(BaseModel):
+    template_id: int = Field(..., example=1)
+    user_id: str = Field(..., example="admin_user")
+    old_version: Optional[str] = Field(None, example="1.0.0")
+    new_version: str = Field(..., example="1.1.0")
+    update_status: UpdateStatus = Field(..., example=UpdateStatus.STARTED)
+    update_log: Optional[str] = Field(None, example="Starting update process...")
+
+class AgentUpdateLogCreate(AgentUpdateLogBase):
+    pass
+
+class AgentUpdateLogResponse(AgentUpdateLogBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# NEW: Build Statistics schema
+class BuildStatistics(BaseModel):
+    template_id: int
+    template_name: Optional[str]
+    role_name: Optional[str]
+    total_builds: int
+    successful_builds: int
+    failed_builds: int
+    latest_build_date: Optional[datetime]
+    latest_version_hash: Optional[str]
+
+# NEW: Running Agents schema
+class RunningAgent(BaseModel):
+    agent_id: str
+    agent_name: str
+    status: str
+    last_seen: Optional[datetime]
+    version_hash: Optional[str]
+    user_id: Optional[str]
+
+# NEW: Agent Build Info view schema
+class AgentBuildInfo(BaseModel):
+    agent_internal_id: int
+    agent_id: str
+    template_id: Optional[int]
+    agent_name: str
+    agent_status: str
+    last_seen: Optional[datetime]
+    last_activity: Optional[str]
+    os_type: str
+    config: Optional[Dict]
+    version_info: Optional[Dict]
+    template_name: Optional[str]
+    template_description: Optional[str]
+    role_name: Optional[str]
+    role_category: Optional[str]
+    build_id: Optional[int]
+    build_status: Optional[str]
+    binary_path: Optional[str]
+    build_time: Optional[int]
+    build_config: Optional[Dict]
+    build_created_at: Optional[datetime]
+    version_hash: Optional[str]
 
 # System schemas
 class SystemInfoResponse(BaseModel):
