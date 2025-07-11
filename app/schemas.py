@@ -31,7 +31,7 @@ class RoleResponse(RoleBase):
     class Config:
         from_attributes = True
         
-# HEARTBEAT SCHEMAS !
+# HEARTBEAT SCHEMAS
 class AgentHeartbeatRequest(BaseModel):
     timestamp: datetime
     agent_id: str
@@ -52,39 +52,42 @@ class AgentHeartbeatResponse(BaseModel):
     next_heartbeat_in: int
     commands: Optional[List[Dict]] = []
 
-# Behavior Template schemas 
+# Behavior Template schemas - UPDATED
 class BehaviorTemplateBase(BaseModel):
     name: str
-    description: str  
-    os_type: str
+    role_id: int
     template_data: Dict
+    os_type: str
+    version: str = "1.0"
 
 class BehaviorTemplateCreate(BehaviorTemplateBase):
     pass
 
 class BehaviorTemplateUpdate(BaseModel):
     name: Optional[str] = None
-    description: Optional[str] = None 
-    os_type: Optional[str] = None
+    role_id: Optional[int] = None
     template_data: Optional[Dict] = None
+    os_type: Optional[str] = None
+    version: Optional[str] = None
     is_active: Optional[bool] = None
 
 class BehaviorTemplateResponse(BehaviorTemplateBase):
     id: int
     is_active: bool
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
-# Agent schemas
+# Agent schemas - UPDATED
 class AgentConfig(BaseModel):
     name: str
     role_id: int
     template_id: int
     os_type: str
-    injection_target: str
-    stealth_level: Optional[int] = 1  # Add default
+    injection_target: Optional[str] = None
+    stealth_level: str = "medium"
     custom_config: Optional[Dict] = {}
 
 class AgentGenerateResponse(BaseModel):
@@ -100,6 +103,7 @@ class AgentResponse(BaseModel):
     name: str
     status: str
     os_type: str
+    stealth_level: str
     last_seen: Optional[datetime]
     created_at: datetime
 
@@ -127,27 +131,26 @@ class DeploymentResponse(BaseModel):
     message: str
     deployment_id: str
 
-# Build schemas
-class BuildConfig(BaseModel):
+# Build schemas - UPDATED
+class AgentBuildRequest(BaseModel):
     agent_id: str
-    target_os: str
-    architecture: str = "x64"
-    build_options: Optional[Dict] = {}
+    force_rebuild: bool = False
+    compilation_options: Optional[Dict] = {}
 
-class BuildResponse(BaseModel):
-    build_id: str
-    status: str
-    message: str
-    download_url: Optional[str] = None
-    logs_url: str
-
-class BuildStatusResponse(BaseModel):
-    build_id: str
-    status: str
-    progress: int
-    message: str
+class AgentBuildResponse(BaseModel):
+    id: int
+    agent_id: int
+    build_config: Dict
+    build_status: str
+    binary_path: Optional[str] = None
+    binary_size: Optional[int] = None
+    build_log: Optional[str] = None
+    build_time: Optional[int] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 # System schemas
 class SystemInfoResponse(BaseModel):
@@ -194,36 +197,6 @@ class ErrorResponse(BaseModel):
     detail: str
     status_code: int
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-# Agent Build schemas
-class AgentBuildRequest(BaseModel):
-    agent_id: str
-    target_os: str
-    architecture: str = "x64"
-    build_type: str = "release"
-    include_plugins: bool = True
-    stealth_features: Optional[Dict] = {}
-
-class AgentBuildResponse(BaseModel):
-    build_id: str
-    agent_id: str
-    status: str
-    message: str
-    download_url: Optional[str] = None
-    logs_url: str
-    created_at: datetime
-    estimated_completion: Optional[datetime] = None
-
-# Build Log schemas  
-class BuildLogEntry(BaseModel):
-    timestamp: datetime
-    level: str
-    message: str
-
-class BuildLogsResponse(BaseModel):
-    build_id: str
-    logs: List[BuildLogEntry]
-    total_lines: int
 
 # ApplicationTemplate schemas
 class ApplicationTemplateBase(BaseModel):
