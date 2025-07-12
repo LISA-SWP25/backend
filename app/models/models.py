@@ -44,6 +44,7 @@ class BehaviorTemplate(Base):
     
     # NEW: Added role_id foreign key from migration script
     role_id = Column(Integer, ForeignKey('roles.id'), nullable=True)
+    version = Column(String(20), nullable=False, default="1.0")
     
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())

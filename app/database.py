@@ -5,7 +5,8 @@ from sqlalchemy.orm import sessionmaker
 import sys
 
 # Для локального запуска API 
-DATABASE_URL = 'postgresql://lisa:pass@localhost:5432/lisa_dev'
+DATABASE_URL='postgresql://lisa:lisa_password_2024@lisa_postgres_quick:5432/lisa_dev'
+
 
 # Для docker-compose 
 # DATABASE_URL = 'postgresql://lisa:pass@lisa_postgres_quick:5432/lisa_dev'

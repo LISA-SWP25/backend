@@ -14,7 +14,7 @@ from app.deps import get_db
 from app.models.models import Role, BehaviorTemplate, Agent, AgentActivity
 from app.schemas import AgentConfig, AgentResponse, AgentGenerateResponse
 
-from app.core.ssh_manager import SSHDeploymentManager
+from core.ssh_manager import SSHDeploymentManager
 from app.schemas import DeploymentRequest, DeploymentResponse
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
