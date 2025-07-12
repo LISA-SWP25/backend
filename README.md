@@ -37,7 +37,7 @@ A FastAPI-based backend system for managing and monitoring software agents that 
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone <https://github.com/LISA-SWP25/backend>
 cd lisa/backend
 
 # Start with Docker Compose
@@ -79,7 +79,7 @@ uvicorn app.main:app --reload
 
 1. **Clone and Install**
    ```bash
-   git clone <your-repo-url>
+   git clone <https://github.com/LISA-SWP25/backend>
    cd lisa/backend
    pip install -r requirements.txt
    ```

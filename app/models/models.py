@@ -42,7 +42,7 @@ class BehaviorTemplate(Base):
     template_data = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
     
-    # NEW: Added role_id foreign key from migration script
+    # Added role_id foreign key from migration script
     role_id = Column(Integer, ForeignKey('roles.id'), nullable=True)
     version = Column(String(20), nullable=False, default="1.0")
     
@@ -64,12 +64,12 @@ class Agent(Base):
     last_seen = Column(TIMESTAMP)
     last_activity = Column(String(255))
     injection_target = Column(String(200))
-    stealth_level = Column(Integer, default=1)
     
     # Foreign keys
     role_id = Column(Integer, ForeignKey('roles.id'))
     template_id = Column(Integer, ForeignKey('behavior_templates.id'))
     
+    # Added from migration script
     version_info = Column(JSON, default=lambda: {})
     build_time = Column(Integer)  # build time in seconds
     
@@ -102,7 +102,6 @@ class AgentBuild(Base):
     agent = relationship("Agent", back_populates="builds")
 
 class AgentUpdateLog(Base):
-    """NEW: Agent update logs table from migration script"""
     __tablename__ = 'agent_update_logs'
     
     id = Column(Integer, primary_key=True, index=True)

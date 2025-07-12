@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 from enum import Enum
@@ -26,14 +26,15 @@ class RoleBase(BaseModel):
     category: str = Field(..., example="Development")
 
 class RoleCreate(RoleBase):
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "Junior Developer",
                 "description": "Entry-level software developer with 0-2 years experience",
                 "category": "Development"
             }
         }
+    )
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = Field(None, example="Senior Developer")
@@ -46,8 +47,7 @@ class RoleResponse(RoleBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
         
 # HEARTBEAT SCHEMAS
 class AgentHeartbeatRequest(BaseModel):
@@ -70,7 +70,7 @@ class AgentHeartbeatResponse(BaseModel):
     next_heartbeat_in: int
     commands: Optional[List[Dict]] = []
 
-# Behavior Template schemas - UPDATED WITH NEW role_id FIELD
+# Behavior Template schemas
 class BehaviorTemplateBase(BaseModel):
     name: str = Field(..., example="Standard Developer Behavior")
     description: Optional[str] = Field(None, example="Standard behavior pattern for developers")
@@ -98,8 +98,8 @@ class BehaviorTemplateBase(BaseModel):
     version: str = Field(default="1.0", example="1.0")
 
 class BehaviorTemplateCreate(BehaviorTemplateBase):
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "Standard Developer Behavior",
                 "description": "Standard behavior pattern for developers",
@@ -127,6 +127,7 @@ class BehaviorTemplateCreate(BehaviorTemplateBase):
                 "version": "1.0"
             }
         }
+    )
 
 class BehaviorTemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, example="Updated Developer Behavior")
@@ -143,38 +144,35 @@ class BehaviorTemplateResponse(BehaviorTemplateBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-# Agent schemas - UPDATED WITH NEW FIELDS
+# Agent schemas 
 class AgentConfig(BaseModel):
     name: str = Field(..., example="TestAgent01")
     role_id: int = Field(..., example=1, description="ID of the role for this agent")
     template_id: int = Field(..., example=1, description="ID of the behavior template")
     os_type: str = Field(..., example="linux")
     injection_target: Optional[str] = Field(None, example="dev-workstation-01")
-    stealth_level: str = Field(default="medium", example="medium")
     custom_config: Optional[Dict] = Field(default={}, example={
         "department": "Development",
         "location": "Headquarters",
         "custom_apps": ["IntelliJ IDEA"]
     })
-    # NEW: Version info for agent updates
+    # Version info for agent updates
     version_info: Optional[Dict] = Field(default={}, example={
         "version_hash": "abc123def456",
         "build_version": "1.0.0",
         "last_updated": "2025-01-15T10:30:00Z"
     })
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "DevAgent01",
                 "role_id": 1,
                 "template_id": 1,
                 "os_type": "linux",
                 "injection_target": "dev-workstation-01",
-                "stealth_level": "medium",
                 "custom_config": {
                     "department": "Development",
                     "location": "Headquarters"
@@ -185,6 +183,7 @@ class AgentConfig(BaseModel):
                 }
             }
         }
+    )
 
 class AgentGenerateResponse(BaseModel):
     agent_id: str
@@ -199,17 +198,16 @@ class AgentResponse(BaseModel):
     name: str
     status: str
     os_type: str
-    stealth_level: str
     last_seen: Optional[datetime]
     created_at: datetime
-    # NEW: Include version info and build time
+    # Include version info and build time
     version_info: Optional[Dict] = None
     build_time: Optional[int] = None
     template_id: Optional[int] = None
     role_id: Optional[int] = None
+    injection_target: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AgentHeartbeat(BaseModel):
     agent_id: str
@@ -232,7 +230,7 @@ class DeploymentResponse(BaseModel):
     message: str
     deployment_id: str
 
-# Build schemas - UPDATED TO MATCH NEW AgentBuild MODEL
+# Build schemas
 class AgentBuildRequest(BaseModel):
     agent_id: str = Field(..., example="USR1234567")
     force_rebuild: bool = Field(default=False, example=False)
@@ -250,15 +248,14 @@ class AgentBuildResponse(BaseModel):
     binary_path: Optional[str] = None
     binary_size: Optional[int] = None
     build_log: Optional[str] = None
-    build_time: Optional[int] = None  # NEW: build time in seconds
+    build_time: Optional[int] = None  # build time in seconds
     created_at: datetime
-    updated_at: datetime  # NEW: updated timestamp
+    updated_at: datetime
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-# NEW: Agent Update Log schemas
+# Agent Update Log schemas
 class AgentUpdateLogBase(BaseModel):
     template_id: int = Field(..., example=1)
     user_id: str = Field(..., example="admin_user")
@@ -274,10 +271,9 @@ class AgentUpdateLogResponse(AgentUpdateLogBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-# NEW: Build Statistics schema
+# Build Statistics schema
 class BuildStatistics(BaseModel):
     template_id: int
     template_name: Optional[str]
@@ -288,7 +284,7 @@ class BuildStatistics(BaseModel):
     latest_build_date: Optional[datetime]
     latest_version_hash: Optional[str]
 
-# NEW: Running Agents schema
+# Running Agents schema
 class RunningAgent(BaseModel):
     agent_id: str
     agent_name: str
@@ -297,7 +293,7 @@ class RunningAgent(BaseModel):
     version_hash: Optional[str]
     user_id: Optional[str]
 
-# NEW: Agent Build Info view schema
+# Agent Build Info view schema
 class AgentBuildInfo(BaseModel):
     agent_internal_id: int
     agent_id: str
@@ -343,8 +339,7 @@ class ActivityLog(BaseModel):
     activity_data: Dict
     timestamp: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Dashboard schemas
 class DashboardStats(BaseModel):
@@ -386,8 +381,8 @@ class ApplicationTemplateBase(BaseModel):
     os_type: str = Field(default="linux", example="linux")
 
 class ApplicationTemplateCreate(ApplicationTemplateBase):
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "Visual Studio Code",
                 "display_name": "VS Code",
@@ -406,6 +401,7 @@ class ApplicationTemplateCreate(ApplicationTemplateBase):
                 "os_type": "linux"
             }
         }
+    )
 
 class ApplicationTemplateUpdate(BaseModel):
     name: Optional[str] = None
@@ -424,5 +420,4 @@ class ApplicationTemplateResponse(ApplicationTemplateBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
