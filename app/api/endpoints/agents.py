@@ -1,258 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
-from pydantic import BaseModel
 import uuid
 import json
 import tempfile
-import subprocess
 from datetime import datetime
 
 from app.deps import get_db
 from app.models.models import Role, BehaviorTemplate, Agent, AgentActivity
 from app.schemas import AgentConfig, AgentResponse, AgentGenerateResponse
 
-from app.core.ssh_manager import SSHDeploymentManager
-from app.schemas import DeploymentRequest, DeploymentResponse
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
 router = APIRouter()
 
-executor = ThreadPoolExecutor(max_workers=5)
 
-@router.post("/agents/{agent_id}/deploy/ssh", response_model=DeploymentResponse)
-async def deploy_agent_ssh(
-    agent_id: str, 
-    deployment: DeploymentRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """Deploy agent to remote host via SSH"""
-    
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
-    # Update agent status
-    agent.status = "deploying"
-    db.commit()
-    
-    # Schedule deployment in background
-    background_tasks.add_task(
-        _perform_ssh_deployment,
-        agent_id=agent_id,
-        agent=agent,
-        deployment=deployment,
-        db=db
-    )
-    
-    return DeploymentResponse(
-        agent_id=agent_id,
-        status="deployment_initiated",
-        message=f"Deploying agent to {deployment.host}",
-        deployment_id=str(uuid.uuid4())
-    )
-
-async def _perform_ssh_deployment(
-    agent_id: str,
-    agent: Agent,
-    deployment: DeploymentRequest,
-    db: Session
-):
-    """Perform actual SSH deployment in background"""
-    ssh_manager = SSHDeploymentManager()
-    
-    try:
-        # Connect to target host
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            executor,
-            ssh_manager.connect,
-            deployment.host,
-            deployment.username,
-            deployment.password,
-            deployment.ssh_key_path
-        )
-        
-        # Prepare agent config
-        agent_config = {
-            "agent_id": agent_id,
-            "name": agent.name,
-            "role": agent.role.name,
-            "template": agent.template.template_data,
-            "server_url": os.getenv("LISA_SERVER_URL", "http://localhost:8000"),
-            "check_in_interval": 60,
-            "stealth_level": agent.stealth_level
-        }
-        
-        # Get agent binary path based on OS
-        agent_binary = f"agents/binaries/lisa_agent_{agent.os_type.lower()}"
-        
-        # Deploy
-        await loop.run_in_executor(
-            executor,
-            ssh_manager.deploy_agent,
-            agent_config,
-            agent_binary
-        )
-        
-        # Update status
-        agent.status = "deployed"
-        agent.injection_target = deployment.host
-        agent.last_seen = datetime.utcnow()
-        db.commit()
-        
-        # Store deployment info
-        activity = AgentActivity(
-            agent_id=agent.id,
-            activity_type="deployment",
-            activity_data={
-                "host": deployment.host,
-                "method": "ssh",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
-        db.add(activity)
-        db.commit()
-        
-    except Exception as e:
-        logger.error(f"Deployment failed for {agent_id}: {str(e)}")
-        agent.status = "deployment_failed"
-        db.commit()
-        
-        # Log failure
-        activity = AgentActivity(
-            agent_id=agent.id,
-            activity_type="deployment_error",
-            activity_data={
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
-        db.add(activity)
-        db.commit()
-    
-    finally:
-        ssh_manager.disconnect()
-
-@router.get("/agents/{agent_id}/logs")
-async def get_agent_logs(
-    agent_id: str,
-    lines: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Retrieve agent logs from remote host"""
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
-    if not agent.injection_target:
-        raise HTTPException(status_code=400, detail="Agent not deployed")
-    
-    # This would connect to the agent's host and retrieve logs
-    # For now, return recent activities
-    activities = db.query(AgentActivity).filter(
-        AgentActivity.agent_id == agent.id
-    ).order_by(desc(AgentActivity.timestamp)).limit(lines).all()
-    
-    return {
-        "agent_id": agent_id,
-        "logs": [
-            {
-                "timestamp": act.timestamp,
-                "type": act.activity_type,
-                "data": act.activity_data
-            } for act in activities
-        ]
-    }
-
-
-class ConfigRequest(BaseModel):
-    username: str = "john_doe"
-    role: str = "Junior Developer"
-    full_name: str = "John Doe"
-
-# Simplified config generation for unified_agent.py
-@router.post("/agents/generate-config")
-def generate_agent_config(request: ConfigRequest, db: Session = Depends(get_db)):
-    """Generate config for unified_agent.py"""
-    agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
-    
-    config = {
-        "user_id": agent_id,
-        "username": request.username,
-        "full_name": request.full_name,
-        "role": request.role,
-        "work_schedule": {
-            "start_time": "09:00",
-            "end_time": "18:00",
-            "breaks": [{"start": "13:00", "duration_minutes": 60}]
-        },
-        "operating_system": "Linux Ubuntu 22.04",
-        "applications_used": [
-            "Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"
-        ],
-        "activity_pattern": "Regular office hours with lunch break",
-        "department": "Development",
-        "location": "Headquarters"
-    }
-    
-    return {
-        "agent_id": agent_id,
-        "config": config,
-        "download_url": f"/api/agents/{agent_id}/config"
-    }
-
-@router.get("/agents/{agent_id}/config")
-def download_config(agent_id: str):
-    """Download agent config as JSON"""
-    config = {
-        "user_id": agent_id,
-        "username": "john_doe",
-        "full_name": "John Doe",
-        "role": "Junior Developer",
-        "work_schedule": {
-            "start_time": "09:00",
-            "end_time": "18:00",
-            "breaks": [{"start": "13:00", "duration_minutes": 60}]
-        },
-        "operating_system": "Linux Ubuntu 22.04",
-        "applications_used": [
-            "Visual Studio Code", "Google Chrome", "Slack", "Docker Desktop"
-        ],
-        "activity_pattern": "Regular office hours with lunch break",
-        "department": "Development",
-        "location": "Headquarters"
-    }
-    
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-        json.dump(config, f, indent=2)
-        temp_path = f.name
-    
-    return FileResponse(
-        temp_path,
-        filename=f"{agent_id}_config.json",
-        media_type="application/json"
-    )
-
-@router.post("/agents/{agent_id}/deploy")
-def deploy_agent(agent_id: str, target_host: str = "localhost"):
-    """Deploy agent via dropper"""
-    dropper_cmd = f"python3 dropper.py --config {agent_id}_config.json --target {target_host}"
-    result = subprocess.run(dropper_cmd, shell=True, capture_output=True)
-    return {"status": "deployed" if result.returncode == 0 else "failed"}
-
-# Database-based config generation (original complex version)
 @router.post("/agents/generate", response_model=AgentGenerateResponse)
-def generate_agent_db_config(config: AgentConfig, db: Session = Depends(get_db)):
+def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
     """Generate agent configuration using database models"""
+    # Validate role exists
     role = db.query(Role).filter(Role.id == config.role_id, Role.is_active == True).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
     
+    # Validate template exists
     template = db.query(BehaviorTemplate).filter(
         BehaviorTemplate.id == config.template_id,
         BehaviorTemplate.is_active == True
@@ -260,14 +31,17 @@ def generate_agent_db_config(config: AgentConfig, db: Session = Depends(get_db))
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     
+    # Validate OS compatibility
     if template.os_type != config.os_type:
         raise HTTPException(
             status_code=400,
             detail=f"Template OS ({template.os_type}) doesn't match requested OS ({config.os_type})"
         )
     
+    # Generate unique agent ID
     agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
     
+    # Create agent in database
     db_agent = Agent(
         agent_id=agent_id,
         name=config.name,
@@ -283,6 +57,7 @@ def generate_agent_db_config(config: AgentConfig, db: Session = Depends(get_db))
     db.commit()
     db.refresh(db_agent)
     
+    # Generate agent configuration
     agent_config = {
         "agent_id": agent_id,
         "name": config.name,
@@ -295,7 +70,7 @@ def generate_agent_db_config(config: AgentConfig, db: Session = Depends(get_db))
         "behavior_template": template.template_data,
         "injection_target": config.injection_target,
         "stealth_level": config.stealth_level,
-        "custom_config": config.custom_config,
+        "custom_config": config.custom_config or {},
         "generated_at": datetime.utcnow().isoformat(),
         "version": "1.0"
     }
@@ -309,29 +84,33 @@ def generate_agent_db_config(config: AgentConfig, db: Session = Depends(get_db))
     )
 
 @router.get("/agents/{agent_id}/config/download")
-def download_agent_config(agent_id: str, format: str = "json", db: Session = Depends(get_db)):
-    """Download agent configuration file from database"""
+def download_agent_config(agent_id: str, db: Session = Depends(get_db)):
+    """Download agent configuration file"""
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
+    # Build complete config
     config = {
         "agent_id": agent.agent_id,
         "name": agent.name,
         "target_os": agent.os_type,
         "role": {
-            "name": agent.role.name,
-            "description": agent.role.description,
-            "category": agent.role.category
+            "name": agent.role.name if agent.role else "Unknown",
+            "description": agent.role.description if agent.role else "",
+            "category": agent.role.category if agent.role else ""
         },
-        "behavior_template": agent.template.template_data,
+        "behavior_template": agent.template.template_data if agent.template else {},
         "injection_target": agent.injection_target,
         "stealth_level": agent.stealth_level,
         "custom_config": agent.config or {},
+        "server_url": "http://localhost:8000",  # LISA backend URL
+        "heartbeat_interval": 86400,  # 24 hours
         "created_at": agent.created_at.isoformat(),
         "version": "1.0"
     }
     
+    # Create temporary file
     content = json.dumps(config, indent=2)
     filename = f"{agent_id}_config.json"
     
@@ -368,67 +147,14 @@ def list_agents(
     agents = query.order_by(desc(Agent.created_at)).offset(skip).limit(limit).all()
     return agents
 
-@router.post("/agents/{agent_id}/deploy")
-def deploy_agent_to_target(agent_id: str, target_config: dict, db: Session = Depends(get_db)):
-    """Deploy enhanced agent to target machine"""
-    
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
-    # Create enhanced config for the agent
-    enhanced_config = {
-        "user_id": agent.agent_id,
-        "username": target_config.get("username", "user"),
-        "full_name": target_config.get("full_name", "Generic User"),
-        "role": agent.role.name,
-        "work_schedule": {
-            "start_time": "09:00",
-            "end_time": "18:00",
-            "breaks": [{"start": "13:00", "duration_minutes": 60}]
-        },
-        "applications_used": ["Visual Studio Code", "Google Chrome", "Slack"],
-        "plugin_support": {
-            "enabled": True,
-            "plugins_directory": "/opt/linux_agent/plugins",
-            "auto_load": True,
-            "fallback_to_builtin": True
-        }
-    }
-    
-    # Call dropper service to deploy
-    dropper_payload = {
-        "agent_id": agent_id,
-        "target_host": target_config["target_host"],
-        "credentials": target_config["credentials"],
-        "agent_config": enhanced_config,
-        "injection_method": target_config.get("injection_method", "dropper")
-    }
-    
-    # This would call the dropper service
-    return {"status": "deployment_initiated", "config": enhanced_config}
-
-@router.get("/agents/{agent_id}/activities")
-def get_agent_activities(agent_id: str, db: Session = Depends(get_db)):
-    """Get real-time activities from deployed agent"""
-    
-    # This would read from agent logs or status
-    return {
-        "agent_id": agent_id,
-        "current_status": "active",
-        "current_application": "Visual Studio Code",
-        "last_activity": "Editing main.py",
-        "work_session_time": "2h 15m",
-        "activities_today": 47
-    }
-
 @router.get("/agents/{agent_id}/status")
 def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
-    """Get agent status from database"""
+    """Get agent status and recent activities"""
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
+    # Get recent activities (heartbeats, etc.)
     recent_activities = db.query(AgentActivity).filter(
         AgentActivity.agent_id == agent.id
     ).order_by(desc(AgentActivity.timestamp)).limit(10).all()
@@ -439,8 +165,10 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
             "name": agent.name,
             "status": agent.status,
             "os_type": agent.os_type,
-            "role": agent.role.name,
-            "template": agent.template.name,
+            "role": agent.role.name if agent.role else "Unknown",
+            "template": agent.template.name if agent.template else "Unknown",
+            "stealth_level": agent.stealth_level,
+            "injection_target": agent.injection_target,
             "last_seen": agent.last_seen,
             "created_at": agent.created_at
         },
@@ -452,4 +180,37 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
                 "timestamp": activity.timestamp
             } for activity in recent_activities
         ]
+    }
+
+# SIMPLE DEPLOYMENT (Future enhancement)
+@router.post("/agents/{agent_id}/deploy")
+def deploy_agent_simple(agent_id: str, deployment_info: dict, db: Session = Depends(get_db)):
+    """Simple agent deployment (placeholder for future)"""
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Update agent status
+    agent.status = "deploying"
+    agent.injection_target = deployment_info.get("target_host", "localhost")
+    db.commit()
+    
+    # Log deployment attempt
+    activity = AgentActivity(
+        agent_id=agent.id,
+        activity_type="deployment_initiated",
+        activity_data={
+            "target_host": deployment_info.get("target_host", "localhost"),
+            "deployment_method": deployment_info.get("method", "manual"),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+    db.add(activity)
+    db.commit()
+    
+    return {
+        "status": "deployment_initiated",
+        "agent_id": agent_id,
+        "target_host": deployment_info.get("target_host", "localhost"),
+        "message": "Deployment process started. Use config download URL to get agent configuration."
     }
