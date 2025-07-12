@@ -79,7 +79,7 @@ uvicorn app.main:app --reload
 
 1. **Clone and Install**
    ```bash
-   git clone <your-repo-url>
+   git clone <https://github.com/LISA-SWP25/backend>
    cd lisa/backend
    pip install -r requirements.txt
    ```
