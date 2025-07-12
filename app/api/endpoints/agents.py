@@ -49,7 +49,6 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         template_id=config.template_id,
         os_type=config.os_type,
         injection_target=config.injection_target,
-        stealth_level=config.stealth_level,
         config=config.custom_config,
         status="configured"
     )
@@ -69,7 +68,6 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         },
         "behavior_template": template.template_data,
         "injection_target": config.injection_target,
-        "stealth_level": config.stealth_level,
         "custom_config": config.custom_config or {},
         "generated_at": datetime.utcnow().isoformat(),
         "version": "1.0"
@@ -102,7 +100,6 @@ def download_agent_config(agent_id: str, db: Session = Depends(get_db)):
         },
         "behavior_template": agent.template.template_data if agent.template else {},
         "injection_target": agent.injection_target,
-        "stealth_level": agent.stealth_level,
         "custom_config": agent.config or {},
         "server_url": "http://localhost:8000",  # LISA backend URL
         "heartbeat_interval": 86400,  # 24 hours
@@ -167,7 +164,6 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
             "os_type": agent.os_type,
             "role": agent.role.name if agent.role else "Unknown",
             "template": agent.template.name if agent.template else "Unknown",
-            "stealth_level": agent.stealth_level,
             "injection_target": agent.injection_target,
             "last_seen": agent.last_seen,
             "created_at": agent.created_at
