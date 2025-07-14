@@ -3,14 +3,19 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
+from pydantic import BaseModel
+from typing import Dict, Any
 import uuid
+import os
 import json
 import tempfile
 from datetime import datetime
 
 from app.deps import get_db
 from app.models.models import Role, BehaviorTemplate, Agent, AgentActivity
-from app.schemas import AgentConfig, AgentResponse, AgentGenerateResponse
+from app.schemas import AgentConfig, AgentResponse, AgentGenerateResponse, DeploymentRequest
+
+SHARED_CONFIG_DIR = "/tmp/shared_configs"
 
 router = APIRouter()
 
@@ -39,8 +44,9 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         )
     
     # Generate unique agent ID
+        # Generate unique agent ID
     agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
-    
+
     # Create agent in database
     db_agent = Agent(
         agent_id=agent_id,
@@ -52,15 +58,17 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         config=config.custom_config,
         status="configured"
     )
+
     db.add(db_agent)
     db.commit()
     db.refresh(db_agent)
-    
+
     # Generate agent configuration
     agent_config = {
         "agent_id": agent_id,
         "name": config.name,
-        "target_os": config.os_type,
+        "os": config.os_type,
+        "template_id": config.template_id,
         "role": {
             "name": role.name,
             "description": role.description,
@@ -70,9 +78,23 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         "injection_target": config.injection_target,
         "custom_config": config.custom_config or {},
         "generated_at": datetime.utcnow().isoformat(),
-        "version": "1.0"
+        "version": "1.0",
     }
-    
+    # --- START OF THE AUTOMATION BLOCK ---
+# Create a task file that will be detected by the agent-deployer
+    try:
+    # The filename includes the agent_id to ensure it's unique
+        task_filename = f"build-{agent_id}.json"
+        task_filepath = os.path.join("/tmp", task_filename) # Правильный путь к общему тому
+
+    # Save the full agent configuration to this file
+        with open(task_filepath, 'w') as f:
+            json.dump(agent_config, f, indent=4)
+
+    except Exception as e:
+        print(f"WARNING: Failed to create deployment task file: {e}")
+# --- END OF THE AUTOMATION BLOCK ---
+
     return AgentGenerateResponse(
         agent_id=agent_id,
         message=f"Agent '{config.name}' configured successfully",
@@ -80,6 +102,59 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         download_url=f"/api/agents/{agent_id}/config/download",
         status_url=f"/api/agents/{agent_id}/status"
     )
+
+@router.post("/agents/{agent_id}/deploy", status_code=202)
+def trigger_deployment(
+    agent_id: str,
+    deployment_info: DeploymentRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Creates a deployment task file for the agent-deployer service to pick up.
+    """
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Prepare the configuration data for the deployer
+    deployment_task = {
+        "agent_id": agent.agent_id,
+        "server_ip": deployment_info.server_ip,
+        "server_user": deployment_info.server_user,
+        "server_password": deployment_info.server_password,
+        "template_id": agent.template_id,
+        "agent_build_config": {
+            "name": agent.name,
+            "os_type": agent.os_type,
+            "custom_config": agent.config
+        }
+    }
+
+    # Ensure the shared directory exists
+    if not os.path.exists(SHARED_CONFIG_DIR):
+        os.makedirs(SHARED_CONFIG_DIR)
+
+    # Create a unique filename for the task
+    task_filename = f"deploy_task_{uuid.uuid4()}.json"
+    task_filepath = os.path.join(SHARED_CONFIG_DIR, task_filename)
+
+    try:
+        with open(task_filepath, 'w') as f:
+            json.dump(deployment_task, f, indent=4)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create deployment task file: {e}")
+        
+    # Update agent status in DB
+    agent.status = "deploying"
+    agent.injection_target = deployment_info.server_ip
+    db.commit()
+
+    return {
+        "status": "deployment_task_created",
+        "agent_id": agent_id,
+        "task_file": task_filename,
+        "message": "Deployment task has been submitted. The agent-deployer service will process it shortly."
+    }
 
 @router.get("/agents/{agent_id}/config/download")
 def download_agent_config(agent_id: str, db: Session = Depends(get_db)):
