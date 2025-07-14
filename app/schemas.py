@@ -18,6 +18,11 @@ class UpdateStatus(str, Enum):
     STARTED = "started"
     COMPLETED = "completed"
     FAILED = "failed"
+
+class DeploymentRequest(BaseModel):
+    server_ip: str
+    server_user: str
+    server_password: str
     
 # Role schemas
 class RoleBase(BaseModel):
@@ -164,7 +169,7 @@ class AgentConfig(BaseModel):
         "build_version": "1.0.0",
         "last_updated": "2025-01-15T10:30:00Z"
     })
-
+    
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -216,19 +221,6 @@ class AgentHeartbeat(BaseModel):
     current_activity: Optional[str] = None
     system_info: Dict
 
-# Deployment schemas
-class DeploymentRequest(BaseModel):
-    host: str = Field(..., example="192.168.1.100")
-    username: str = Field(..., example="admin")
-    password: Optional[str] = Field(None, example="secure_password")
-    ssh_key_path: Optional[str] = Field(None, example="/home/user/.ssh/id_rsa")
-    port: int = Field(default=22, example=22)
-
-class DeploymentResponse(BaseModel):
-    agent_id: str
-    status: str
-    message: str
-    deployment_id: str
 
 # Build schemas
 class AgentBuildRequest(BaseModel):
