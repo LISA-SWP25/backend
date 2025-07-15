@@ -123,6 +123,7 @@ def trigger_deployment(
         "server_user": deployment_info.server_user,
         "server_password": deployment_info.server_password,
         "template_id": agent.template_id,
+        "os_type": agent.os_type,
         "agent_build_config": {
             "name": agent.name,
             "os_type": agent.os_type,
