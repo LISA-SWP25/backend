@@ -413,3 +413,12 @@ class ApplicationTemplateResponse(ApplicationTemplateBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class ServerTemplate(BaseModel):
+    id: int = None
+    name: str = None
+    description: Optional[str] = None
+    ip: str = None
+    login: str = None
+    password: str = None
+    os: str = None

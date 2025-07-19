@@ -6,7 +6,7 @@ import uuid
 
 # Database imports
 from app.database import Base, engine
-from app.api.endpoints import roles, templates, agents, builds, system, heartbeat, applications
+from app.api.endpoints import roles, templates, agents, builds, system, heartbeat, applications, servers
 from app.api import websocket
 
 # Create tables
@@ -53,6 +53,7 @@ app.include_router(builds.router, prefix="/api", tags=["CI/CD (Builds)"])
 app.include_router(system.router, prefix="/api", tags=["System"])
 app.include_router(websocket.router, prefix="/api", tags=["WebSocket"])
 app.include_router(applications.router, prefix="/api", tags=["Applications"])
+app.include_router(servers.router, prefix='/api', tags=["Servers"])
 
 @app.get("/")
 def root():

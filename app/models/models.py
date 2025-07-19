@@ -123,3 +123,13 @@ class AgentActivity(Base):
     
     # Relationships
     agent = relationship("Agent", back_populates="activities")
+
+class Servers(Base):
+    __tablename__ = 'servers'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50))
+    description = Column(String(100))
+    ip = Column(String(20))
+    login = Column(String(50))
+    password = Column(String(50))
+    os = Column(String(15))
